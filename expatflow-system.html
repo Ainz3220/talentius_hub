@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ExpatFlow — Management System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F7F6F2;
+  --surface:#FFFFFF;
+  --surface2:#F0EFE9;
+  --surface3:#E8E6DE;
+  --border:#E0DDD4;
+  --border2:#CCCAC0;
+  --text:#1A1916;
+  --text2:#5C5A52;
+  --text3:#9B9890;
+  --accent:#1F4E3D;
+  --accent-light:#E8F0ED;
+  --accent2:#C4521A;
+  --accent2-light:#FAEEE6;
+  --blue:#1A3A5C;
+  --blue-light:#E6EEF7;
+  --amber:#8A6200;
+  --amber-light:#FDF3DC;
+  --red:#8B1A1A;
+  --red-light:#FDEAEA;
+  --green:#1A5C2A;
+  --green-light:#E6F7EA;
+  --r:10px;--r-sm:6px;--r-lg:16px;
+}
+body{font-family:'Instrument Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh;display:flex}
+
+/* ── SIDEBAR ── */
+.sidebar{width:232px;min-height:100vh;background:var(--text);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:50}
+.sidebar-logo{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.logo-mark{display:flex;align-items:center;gap:9px}
+.logo-icon{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.logo-icon svg{width:18px;height:18px;stroke:#fff;stroke-width:2;fill:none}
+.logo-text{font-family:'Instrument Serif',serif;font-size:17px;color:#fff;letter-spacing:-0.3px}
+.logo-sub{font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:1.5px;text-transform:uppercase;margin-top:1px}
+
+.sidebar-section{padding:16px 12px 6px;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:rgba(255,255,255,0.25)}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r-sm);margin:1px 8px;cursor:pointer;transition:background .15s;color:rgba(255,255,255,0.55);font-size:13px}
+.nav-item:hover{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85)}
+.nav-item.active{background:var(--accent);color:#fff}
+.nav-item .nav-icon{width:16px;height:16px;flex-shrink:0;opacity:0.8}
+.nav-item.active .nav-icon{opacity:1}
+.nav-badge-count{margin-left:auto;background:var(--accent2);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px}
+
+.sidebar-bottom{margin-top:auto;padding:12px;border-top:1px solid rgba(255,255,255,0.08)}
+.user-row{display:flex;align-items:center;gap:10px;padding:8px;border-radius:var(--r-sm);cursor:pointer}
+.user-row:hover{background:rgba(255,255,255,0.06)}
+.user-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;flex-shrink:0}
+.user-name{font-size:12px;color:rgba(255,255,255,0.8);font-weight:500}
+.user-role{font-size:10px;color:rgba(255,255,255,0.35)}
+
+/* ── MAIN ── */
+.main{margin-left:232px;flex:1;min-height:100vh;display:flex;flex-direction:column}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;height:56px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:40}
+.page-title{font-family:'Instrument Serif',serif;font-size:19px;color:var(--text)}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.icon-btn{width:34px;height:34px;border-radius:var(--r-sm);border:1px solid var(--border);background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s;color:var(--text2);position:relative}
+.icon-btn:hover{background:var(--surface2)}
+.icon-btn svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none}
+.notif-dot{position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--accent2);border:1.5px solid var(--surface)}
+
+.content{padding:24px 28px;flex:1}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.badge.pending{background:var(--amber-light);color:var(--amber)}
+.badge.pending::before{background:var(--amber)}
+.badge.active{background:var(--green-light);color:var(--green)}
+.badge.active::before{background:var(--green)}
+.badge.transferred{background:var(--blue-light);color:var(--blue)}
+.badge.transferred::before{background:var(--blue)}
+.badge.expired{background:var(--red-light);color:var(--red)}
+.badge.expired::before{background:var(--red)}
+.badge.repatriated{background:var(--surface3);color:var(--text3)}
+.badge.repatriated::before{background:var(--text3)}
+.badge.company{background:var(--blue-light);color:var(--blue)}
+.badge.company::before{background:var(--blue)}
+.badge.individual{background:var(--accent2-light);color:var(--accent2)}
+.badge.individual::before{background:var(--accent2)}
+
+/* ── KPI CARDS ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px 20px}
+.kpi-label{font-size:11px;color:var(--text3);letter-spacing:0.5px;margin-bottom:6px}
+.kpi-value{font-family:'Instrument Serif',serif;font-size:32px;color:var(--text);line-height:1}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:5px}
+.kpi-sub span{font-weight:600}
+.kpi.warn .kpi-value{color:var(--accent2)}
+.kpi.ok .kpi-value{color:var(--accent)}
+
+/* ── TABLES ── */
+.table-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.table-header{padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
+.table-header h3{font-size:14px;font-weight:600;color:var(--text)}
+.ml-auto{margin-left:auto}
+.search-box{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 12px;font-size:13px;color:var(--text2);min-width:200px}
+.search-box svg{width:14px;height:14px;stroke:var(--text3);flex-shrink:0}
+.search-box input{border:none;background:transparent;outline:none;color:var(--text);font-size:13px;font-family:inherit;width:100%}
+.search-box input::placeholder{color:var(--text3)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r-sm);font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:inherit}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#163D2E}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text2)}
+.btn-outline:hover{background:var(--surface2)}
+.btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none}
+
+table{width:100%;border-collapse:collapse}
+thead th{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.5px;text-transform:uppercase;padding:10px 16px;text-align:left;background:var(--surface2);border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .12s;cursor:pointer}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--surface2)}
+td{padding:12px 16px;font-size:13px;color:var(--text)}
+td.muted{color:var(--text2)}
+td.mono{font-family:'Instrument Sans',monospace;font-size:12px;color:var(--text2)}
+.avatar-cell{display:flex;align-items:center;gap:10px}
+.av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.av.g{background:var(--accent-light);color:var(--accent)}
+.av.b{background:var(--blue-light);color:var(--blue)}
+.av.o{background:var(--accent2-light);color:var(--accent2)}
+.av.r{background:var(--red-light);color:var(--red)}
+.av-name{font-weight:500;font-size:13px}
+.av-sub{font-size:11px;color:var(--text3)}
+.expiry-warn{color:var(--accent2);font-weight:500}
+.expiry-ok{color:var(--text2)}
+.expiry-danger{color:var(--red);font-weight:600}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:2px;background:var(--surface2);border-radius:var(--r-sm);padding:3px;margin-bottom:20px;width:fit-content}
+.tab{padding:6px 16px;border-radius:5px;font-size:13px;font-weight:500;cursor:pointer;color:var(--text2);transition:all .15s}
+.tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+.tab:hover:not(.active){color:var(--text)}
+
+/* ── DETAIL PANEL ── */
+.detail-overlay{position:fixed;inset:0;background:rgba(26,25,22,0.4);z-index:100;display:none;align-items:flex-start;justify-content:flex-end}
+.detail-overlay.open{display:flex}
+.detail-panel{width:480px;height:100vh;background:var(--surface);overflow-y:auto;box-shadow:-8px 0 40px rgba(0,0,0,0.12);animation:slideIn .2s ease}
+@keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+.detail-top{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:16px}
+.detail-avatar{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600;flex-shrink:0}
+.detail-name{font-family:'Instrument Serif',serif;font-size:20px;line-height:1.2}
+.detail-meta{font-size:12px;color:var(--text3);margin-top:3px;display:flex;gap:8px;align-items:center}
+.close-btn{margin-left:auto;width:30px;height:30px;border-radius:var(--r-sm);border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.close-btn svg{width:14px;height:14px;stroke:var(--text2)}
+.detail-body{padding:20px 24px}
+.detail-section{margin-bottom:20px}
+.detail-section-title{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:10px}
+.detail-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+.detail-row:last-child{border-bottom:none}
+.detail-label{font-size:12px;color:var(--text3)}
+.detail-val{font-size:12px;color:var(--text);font-weight:500;text-align:right}
+.detail-val.enc{color:var(--amber);font-family:monospace}
+.checklist-item-d{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.checklist-item-d:last-child{border-bottom:none}
+.cb{width:17px;height:17px;border-radius:4px;flex-shrink:0;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;margin-top:1px;cursor:pointer;transition:all .15s}
+.cb.done{background:var(--accent);border-color:var(--accent)}
+.cb.done svg{display:block}
+.cb svg{display:none;width:10px;height:10px;stroke:#fff;stroke-width:3;fill:none}
+.cb.partial{border-color:var(--amber);background:var(--amber-light)}
+.cl-meta{margin-left:auto;font-size:10px;color:var(--text3);white-space:nowrap;padding-top:2px}
+.cl-text.done-text{color:var(--text3);text-decoration:line-through}
+.progress-bar{background:var(--surface3);border-radius:4px;height:5px;margin-bottom:14px}
+.progress-fill{height:5px;border-radius:4px;background:var(--accent);transition:width .4s}
+.doc-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.doc-row:last-child{border-bottom:none}
+.doc-icon{width:32px;height:32px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.doc-name{font-size:12px;font-weight:500}
+.doc-exp{font-size:11px}
+.doc-dl{margin-left:auto;padding:4px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:11px;cursor:pointer;color:var(--text2);background:transparent;font-family:inherit;transition:background .15s}
+.doc-dl:hover{background:var(--surface2)}
+.transfer-item{padding:10px 0;border-bottom:1px solid var(--border);position:relative;padding-left:20px}
+.transfer-item:last-child{border-bottom:none}
+.transfer-item::before{content:'';position:absolute;left:6px;top:16px;width:8px;height:8px;border-radius:50%;background:var(--accent);border:2px solid var(--surface)}
+.transfer-date{font-size:10px;color:var(--text3);margin-bottom:3px}
+.transfer-title{font-size:12px;font-weight:600}
+.transfer-desc{font-size:11px;color:var(--text2);margin-top:1px}
+.approval-box{background:var(--amber-light);border:1px solid rgba(138,98,0,0.2);border-radius:var(--r);padding:12px 14px;margin-bottom:14px}
+.approval-title{font-size:12px;font-weight:600;color:var(--amber);margin-bottom:6px}
+.approval-actions{display:flex;gap:8px;margin-top:10px}
+.btn-approve{background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:var(--r-sm);font-size:12px;cursor:pointer;font-family:inherit;font-weight:500}
+.btn-reject{background:transparent;color:var(--red);border:1px solid var(--red-light);padding:6px 14px;border-radius:var(--r-sm);font-size:12px;cursor:pointer;font-family:inherit}
+
+/* ── ALERTS PANEL ── */
+.alerts-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.alert-item{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);transition:background .12s;cursor:pointer}
+.alert-item:last-child{border-bottom:none}
+.alert-item:hover{background:var(--surface2)}
+.alert-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.alert-dot.danger{background:var(--red)}
+.alert-dot.warn{background:var(--amber)}
+.alert-dot.info{background:var(--blue)}
+.alert-title{font-size:13px;font-weight:500}
+.alert-sub{font-size:11px;color:var(--text3);margin-top:1px}
+.alert-time{margin-left:auto;font-size:10px;color:var(--text3);white-space:nowrap;padding-top:2px}
+
+/* ── GRID LAYOUT ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+
+/* ── FORM ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(26,25,22,0.45);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:var(--r-lg);width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.15);animation:modalIn .18s ease}
+@keyframes modalIn{from{transform:translateY(16px) scale(0.98);opacity:0}to{transform:none;opacity:1}}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center}
+.modal-header h3{font-family:'Instrument Serif',serif;font-size:18px}
+.modal-body{padding:20px 24px}
+.modal-footer{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.form-group{margin-bottom:14px}
+.form-label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px;display:block}
+.form-label .req{color:var(--accent2)}
+.form-input{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s}
+.form-input:focus{border-color:var(--accent)}
+.form-input::placeholder{color:var(--text3)}
+select.form-input{cursor:pointer}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-hint{font-size:11px;color:var(--text3);margin-top:3px}
+.enc-hint{font-size:11px;color:var(--amber);margin-top:3px;display:flex;align-items:center;gap:4px}
+
+/* ── PAGES ── */
+.page{display:none}
+.page.active{display:block}
+
+/* ── DORMITORY CARDS ── */
+.dorm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.dorm-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px;cursor:pointer;transition:all .15s}
+.dorm-card:hover{border-color:var(--border2);box-shadow:0 2px 12px rgba(0,0,0,0.06)}
+.dorm-name{font-weight:600;font-size:14px;margin-bottom:4px}
+.dorm-addr{font-size:12px;color:var(--text3);margin-bottom:12px}
+.dorm-stat{display:flex;justify-content:space-between;align-items:center;font-size:12px}
+.dorm-stat-val{font-family:'Instrument Serif',serif;font-size:22px;color:var(--text)}
+.dorm-stat-label{font-size:10px;color:var(--text3);margin-top:1px}
+.dorm-clients{margin-top:12px;display:flex;gap:6px;flex-wrap:wrap}
+.client-chip{font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;color:var(--text2)}
+.occ-bar{height:5px;background:var(--surface3);border-radius:3px;margin-top:12px}
+.occ-fill{height:5px;border-radius:3px;background:var(--accent)}
+
+/* ── AUDIT ── */
+.audit-table td{font-size:12px;font-family:'Instrument Sans',monospace}
+.audit-from{color:var(--red);background:var(--red-light);padding:2px 7px;border-radius:4px;font-size:11px;font-family:monospace}
+.audit-to{color:var(--green);background:var(--green-light);padding:2px 7px;border-radius:4px;font-size:11px;font-family:monospace}
+.action-badge{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600}
+.action-badge.create{background:var(--green-light);color:var(--green)}
+.action-badge.update{background:var(--blue-light);color:var(--blue)}
+.action-badge.delete{background:var(--red-light);color:var(--red)}
+
+/* ── CHECKLIST TEMPLATE ── */
+.template-group{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:14px;overflow:hidden}
+.template-group-header{padding:14px 18px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-weight:600;font-size:13px}
+.template-item{display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid var(--border);font-size:13px}
+.template-item:last-child{border-bottom:none}
+.drag-handle{color:var(--text3);cursor:grab;font-size:12px}
+.template-item-text{flex:1}
+.template-remove{width:22px;height:22px;border-radius:4px;border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);transition:all .15s}
+.template-remove:hover{background:var(--red-light);color:var(--red);border-color:transparent}
+.template-remove svg{width:12px;height:12px;stroke:currentColor;fill:none}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:48px 24px;color:var(--text3)}
+.empty-icon{font-size:36px;margin-bottom:12px}
+.empty-title{font-size:14px;font-weight:600;color:var(--text2);margin-bottom:6px}
+.empty-sub{font-size:12px}
+
+/* TOOLTIP */
+[data-tip]{position:relative}
+[data-tip]::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--text);color:#fff;font-size:11px;padding:4px 8px;border-radius:5px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:999}
+[data-tip]:hover::after{opacity:1}
+
+/* LOGIN */
+.login-page{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:500;flex-direction:column;gap:32px}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:36px 40px;width:380px;box-shadow:0 4px 40px rgba(0,0,0,0.06)}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-logo .logo-icon{margin:0 auto 10px;width:44px;height:44px;border-radius:10px}
+.login-logo .logo-icon svg{width:24px;height:24px}
+.login-title{font-family:'Instrument Serif',serif;font-size:22px;text-align:center;color:var(--text)}
+.login-sub{font-size:12px;color:var(--text3);text-align:center;margin-top:4px;margin-bottom:24px}
+.login-btn{width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px;transition:background .15s}
+.login-btn:hover{background:#163D2E}
+.otp-digits{display:flex;gap:8px;justify-content:center;margin:16px 0}
+.otp-digit{width:44px;height:52px;border:1.5px solid var(--border);border-radius:var(--r-sm);text-align:center;font-size:22px;font-weight:600;font-family:inherit;outline:none;transition:border-color .15s;color:var(--text);background:var(--surface)}
+.otp-digit:focus{border-color:var(--accent)}
+.otp-step{display:none}
+.otp-step.visible{display:block}
+
+/* NOTIFICATION DRAWER */
+.notif-drawer{position:fixed;top:56px;right:0;width:340px;height:calc(100vh - 56px);background:var(--surface);border-left:1px solid var(--border);z-index:90;transform:translateX(100%);transition:transform .2s;overflow-y:auto}
+.notif-drawer.open{transform:translateX(0)}
+.notif-drawer-header{padding:16px 18px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px;display:flex;align-items:center}
+.notif-drawer-header span{margin-left:auto;font-size:11px;color:var(--accent);cursor:pointer;font-weight:500}
+.notif-item{display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.notif-item:hover{background:var(--surface2)}
+.notif-item.unread{border-left:3px solid var(--accent2)}
+.notif-item:not(.unread){border-left:3px solid transparent}
+.ni-icon{width:34px;height:34px;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.ni-icon.danger{background:var(--red-light)}
+.ni-icon.warn{background:var(--amber-light)}
+.ni-icon.info{background:var(--blue-light)}
+.ni-title{font-size:12px;font-weight:500;margin-bottom:2px}
+.ni-sub{font-size:11px;color:var(--text3)}
+.ni-time{margin-top:3px;font-size:10px;color:var(--text3)}
+
+/* ── RESPONSIVE TWEAKS ── */
+@media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-page" id="loginPage">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+      <div class="login-title">ExpatFlow</div>
+      <div class="login-sub">Expat Management System</div>
+    </div>
+    <div id="loginStep">
+      <div class="form-group">
+        <label class="form-label">Email address</label>
+        <input class="form-input" type="email" placeholder="you@company.com" value="sarah@expatflow.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" placeholder="••••••••" value="password">
+      </div>
+      <button class="login-btn" onclick="showOtp()">Continue</button>
+    </div>
+    <div class="otp-step" id="otpStep">
+      <div style="text-align:center;margin-bottom:6px;font-size:13px;color:var(--text2)">Enter the 6-digit OTP sent to your email</div>
+      <div class="otp-digits">
+        <input class="otp-digit" maxlength="1" oninput="otpNext(this)" value="3">
+        <input class="otp-digit" maxlength="1" oninput="otpNext(this)" value="8">
+        <input class="otp-digit" maxlength="1" oninput="otpNext(this)" value="4">
+        <input class="otp-digit" maxlength="1" oninput="otpNext(this)" value="9">
+        <input class="otp-digit" maxlength="1" oninput="otpNext(this)" value="1">
+        <input class="otp-digit" maxlength="1" oninput="otpNext(this)" value="2">
+      </div>
+      <div style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:12px">Resend OTP in <span style="color:var(--accent);font-weight:600">58s</span></div>
+      <button class="login-btn" onclick="doLogin()">Verify & Sign In</button>
+    </div>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">
+      <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+      <div><div class="logo-text">ExpatFlow</div><div class="logo-sub">Management</div></div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">Expat Module</div>
+  <div class="nav-item active" onclick="nav('dashboard',this)">
+    <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Dashboard
+  </div>
+  <div class="nav-item" onclick="nav('expats',this)">
+    <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75"/><path d="M21 21v-2a4 4 0 00-3-3.87"/></svg>
+    Expats
+  </div>
+  <div class="nav-item" onclick="nav('clients',this)">
+    <svg class="nav-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+    Clients
+  </div>
+  <div class="nav-item" onclick="nav('dormitories',this)">
+    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Dormitories
+  </div>
+  <div class="nav-item" onclick="nav('transfers',this)">
+    <svg class="nav-icon" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+    Transfers
+    <span class="nav-badge-count">3</span>
+  </div>
+
+  <div class="sidebar-section">Operations</div>
+  <div class="nav-item" onclick="nav('checklist-templates',this)">
+    <svg class="nav-icon" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+    Checklists
+  </div>
+  <div class="nav-item" onclick="nav('audit',this)">
+    <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    Audit Trail
+  </div>
+
+  <div class="sidebar-section" style="margin-top:8px">Other Modules</div>
+  <div class="nav-item" style="opacity:0.4;pointer-events:none">
+    <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+    Employees
+    <span style="font-size:9px;background:rgba(255,255,255,0.1);padding:1px 6px;border-radius:8px;margin-left:auto;color:rgba(255,255,255,0.4)">Phase 2</span>
+  </div>
+  <div class="nav-item" style="opacity:0.4;pointer-events:none">
+    <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Leave
+    <span style="font-size:9px;background:rgba(255,255,255,0.1);padding:1px 6px;border-radius:8px;margin-left:auto;color:rgba(255,255,255,0.4)">Phase 3</span>
+  </div>
+
+  <div class="sidebar-bottom">
+    <div class="user-row">
+      <div class="user-avatar">SK</div>
+      <div><div class="user-name">Sarah Krishnan</div><div class="user-role">Manager / HR</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- NOTIFICATION DRAWER -->
+<div class="notif-drawer" id="notifDrawer">
+  <div class="notif-drawer-header">Notifications <span onclick="toggleNotif()">✕</span></div>
+  <div class="notif-item unread" onclick="openExpat('MH')">
+    <div class="ni-icon danger">🚨</div>
+    <div><div class="ni-title">Visa expiring in 7 days</div><div class="ni-sub">Mohammed Hassan — Work Permit WP-8811</div><div class="ni-time">2 hours ago</div></div>
+  </div>
+  <div class="notif-item unread">
+    <div class="ni-icon warn">⏳</div>
+    <div><div class="ni-title">Transfer awaiting approval</div><div class="ni-sub">Raj Kumar — Dorm A → Dorm C</div><div class="ni-time">5 hours ago</div></div>
+  </div>
+  <div class="notif-item unread">
+    <div class="ni-icon warn">📋</div>
+    <div><div class="ni-title">Checklist overdue — 3 items</div><div class="ni-sub">Nguyen Van A — pending &gt;7 days</div><div class="ni-time">1 day ago</div></div>
+  </div>
+  <div class="notif-item">
+    <div class="ni-icon info">📄</div>
+    <div><div class="ni-title">Document expiry — 30 days</div><div class="ni-sub">Apex Construction — Business License</div><div class="ni-time">2 days ago</div></div>
+  </div>
+  <div class="notif-item">
+    <div class="ni-icon info">✉️</div>
+    <div><div class="ni-title">Email alert sent</div><div class="ni-sub">SendGrid — 4 expiry warnings dispatched</div><div class="ni-time">3 days ago</div></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main" id="mainArea" style="display:none">
+  <div class="topbar">
+    <div class="page-title" id="pageTitle">Dashboard</div>
+    <div class="topbar-right">
+      <div class="search-box" style="min-width:240px">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input placeholder="Search expats, clients, dorms…" oninput="globalSearch(this.value)">
+      </div>
+      <div class="icon-btn" onclick="toggleNotif()" data-tip="Notifications">
+        <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="notif-dot"></span>
+      </div>
+      <div class="icon-btn" data-tip="Settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── DASHBOARD ── -->
+    <div class="page active" id="page-dashboard">
+      <div class="kpi-grid">
+        <div class="kpi ok">
+          <div class="kpi-label">Active Expats</div>
+          <div class="kpi-value">247</div>
+          <div class="kpi-sub"><span style="color:var(--green)">+12</span> this month</div>
+        </div>
+        <div class="kpi warn">
+          <div class="kpi-label">Docs Expiring (30d)</div>
+          <div class="kpi-value">18</div>
+          <div class="kpi-sub"><span style="color:var(--red)">4 in 7 days</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Pending Checklists</div>
+          <div class="kpi-value">9</div>
+          <div class="kpi-sub"><span style="color:var(--amber)">3 overdue</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Active Clients</div>
+          <div class="kpi-value">34</div>
+          <div class="kpi-sub"><span>22 companies</span> · 12 individual</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="alerts-panel">
+            <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center">
+              <span style="font-weight:600;font-size:13px">🔔 Active Alerts</span>
+              <span style="margin-left:auto;font-size:11px;color:var(--accent);cursor:pointer">View all</span>
+            </div>
+            <div class="alert-item" onclick="nav('expats',document.querySelector('[onclick*=expats]'));openExpat('MH')">
+              <div class="alert-dot danger"></div>
+              <div><div class="alert-title">Visa expiry — 7 days</div><div class="alert-sub">Mohammed Hassan · WP-8811</div></div>
+              <div class="alert-time">⚠️ Urgent</div>
+            </div>
+            <div class="alert-item">
+              <div class="alert-dot danger"></div>
+              <div><div class="alert-title">Visa expiry — 5 days</div><div class="alert-sub">Lin Wei · WP-7723</div></div>
+              <div class="alert-time">⚠️ Urgent</div>
+            </div>
+            <div class="alert-item">
+              <div class="alert-dot warn"></div>
+              <div><div class="alert-title">Permit expiry — 28 days</div><div class="alert-sub">Apex Construction · Business Reg.</div></div>
+              <div class="alert-time">30d</div>
+            </div>
+            <div class="alert-item">
+              <div class="alert-dot warn"></div>
+              <div><div class="alert-title">Transfer pending approval</div><div class="alert-sub">Raj Kumar · 3 days pending</div></div>
+              <div class="alert-time">Approve</div>
+            </div>
+            <div class="alert-item">
+              <div class="alert-dot info"></div>
+              <div><div class="alert-title">Checklist 67% complete</div><div class="alert-sub">Nguyen Van A · 3 items remain</div></div>
+              <div class="alert-time">Overdue</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="table-card">
+            <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center">
+              <span style="font-weight:600;font-size:13px">🔄 Recent Transfers</span>
+              <span class="badge transferred" style="margin-left:auto">3 pending</span>
+            </div>
+            <table>
+              <thead><tr><th>Expat</th><th>From → To</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr onclick="nav('transfers',document.querySelector('[onclick*=transfers]'))">
+                  <td><div class="avatar-cell"><div class="av b">RK</div><div><div class="av-name">Raj Kumar</div><div class="av-sub">Dorm change</div></div></div></td>
+                  <td class="muted" style="font-size:12px">Dorm A → Dorm C</td>
+                  <td><span class="badge pending">Pending</span></td>
+                </tr>
+                <tr>
+                  <td><div class="avatar-cell"><div class="av g">SP</div><div><div class="av-name">Suresh Pillai</div><div class="av-sub">Client change</div></div></div></td>
+                  <td class="muted" style="font-size:12px">Apex → BuildCo</td>
+                  <td><span class="badge pending">Pending</span></td>
+                </tr>
+                <tr>
+                  <td><div class="avatar-cell"><div class="av o">FA</div><div><div class="av-name">Fatimah Ahmad</div><div class="av-sub">Completed</div></div></div></td>
+                  <td class="muted" style="font-size:12px">Dorm B → Dorm A</td>
+                  <td><span class="badge active">Approved</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dormitory Occupancy -->
+      <div style="margin-top:16px">
+        <div class="table-card">
+          <div style="padding:14px 16px;border-bottom:1px solid var(--border)"><span style="font-weight:600;font-size:13px">🏠 Dormitory Occupancy</span></div>
+          <div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px">
+            <div style="background:var(--surface2);border-radius:var(--r);padding:14px">
+              <div style="font-weight:600;font-size:13px">Block A</div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Jalan Kuching, KL</div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--text2)">Occupancy</span><span style="font-weight:600">82 / 100</span></div>
+              <div class="occ-bar"><div class="occ-fill" style="width:82%"></div></div>
+            </div>
+            <div style="background:var(--surface2);border-radius:var(--r);padding:14px">
+              <div style="font-weight:600;font-size:13px">Block B</div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Puchong Jaya</div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--text2)">Occupancy</span><span style="font-weight:600">54 / 80</span></div>
+              <div class="occ-bar"><div class="occ-fill" style="width:67%"></div></div>
+            </div>
+            <div style="background:var(--surface2);border-radius:var(--r);padding:14px">
+              <div style="font-weight:600;font-size:13px">Block C</div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Shah Alam</div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--text2)">Occupancy</span><span style="font-weight:600">111 / 120</span></div>
+              <div class="occ-bar"><div class="occ-fill" style="width:92%;background:var(--accent2)"></div></div>
+            </div>
+            <div style="background:var(--surface2);border-radius:var(--r);padding:14px">
+              <div style="font-weight:600;font-size:13px">Block D</div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Klang</div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--text2)">Occupancy</span><span style="font-weight:600">11 / 60</span></div>
+              <div class="occ-bar"><div class="occ-fill" style="width:18%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── EXPATS ── -->
+    <div class="page" id="page-expats">
+      <div class="tabs">
+        <div class="tab active" onclick="filterExpats('all',this)">All (247)</div>
+        <div class="tab" onclick="filterExpats('active',this)">Active (198)</div>
+        <div class="tab" onclick="filterExpats('pending',this)">Pending (31)</div>
+        <div class="tab" onclick="filterExpats('expiring',this)">Expiring (18)</div>
+        <div class="tab" onclick="filterExpats('transferred',this)">Transferred (14)</div>
+      </div>
+      <div class="table-card">
+        <div class="table-header">
+          <h3>Expats</h3>
+          <div class="search-box" style="min-width:220px">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input placeholder="Search by name, passport…">
+          </div>
+          <div class="ml-auto" style="display:flex;gap:8px">
+            <button class="btn btn-outline" onclick="openModal('bulkDownloadModal')">
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Bulk Export
+            </button>
+            <button class="btn btn-primary" onclick="openModal('addExpatModal')">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Expat
+            </button>
+          </div>
+        </div>
+        <table id="expatTable">
+          <thead><tr><th>Name</th><th>Passport</th><th>Client</th><th>Dormitory</th><th>Status</th><th>Visa Expiry</th><th>Checklist</th></tr></thead>
+          <tbody>
+            <tr onclick="openExpat('MH')">
+              <td><div class="avatar-cell"><div class="av g">MH</div><div><div class="av-name">Mohammed Hassan</div><div class="av-sub">Bangladesh</div></div></div></td>
+              <td class="mono">🔐 ••••4521</td>
+              <td>Apex Construction</td>
+              <td>Block B · Rm 12</td>
+              <td><span class="badge active">Active</span></td>
+              <td><span class="expiry-warn">28 Jun 2024 ⚠</span></td>
+              <td><span style="font-size:12px;color:var(--accent)">5/8</span></td>
+            </tr>
+            <tr onclick="openExpat('RK')">
+              <td><div class="avatar-cell"><div class="av b">RK</div><div><div class="av-name">Raj Kumar</div><div class="av-sub">India</div></div></div></td>
+              <td class="mono">🔐 ••••7832</td>
+              <td>BuildCo Sdn Bhd</td>
+              <td>Block A · Rm 5</td>
+              <td><span class="badge transferred">Transferred</span></td>
+              <td><span class="expiry-ok">12 Dec 2024</span></td>
+              <td><span style="font-size:12px;color:var(--accent)">8/8</span></td>
+            </tr>
+            <tr>
+              <td><div class="avatar-cell"><div class="av o">NVA</div><div><div class="av-name">Nguyen Van A</div><div class="av-sub">Vietnam</div></div></div></td>
+              <td class="mono">🔐 ••••1193</td>
+              <td>Mr. David Lim</td>
+              <td>Block C · Rm 34</td>
+              <td><span class="badge pending">Pending</span></td>
+              <td><span class="expiry-ok">03 Mar 2025</span></td>
+              <td><span style="font-size:12px;color:var(--amber)">3/8 !</span></td>
+            </tr>
+            <tr>
+              <td><div class="avatar-cell"><div class="av r">LW</div><div><div class="av-name">Lin Wei</div><div class="av-sub">China</div></div></div></td>
+              <td class="mono">🔐 ••••6644</td>
+              <td>Apex Construction</td>
+              <td>Block A · Rm 19</td>
+              <td><span class="badge active">Active</span></td>
+              <td><span class="expiry-danger">05 Jun 2024 🚨</span></td>
+              <td><span style="font-size:12px;color:var(--accent)">8/8</span></td>
+            </tr>
+            <tr>
+              <td><div class="avatar-cell"><div class="av g">FA</div><div><div class="av-name">Fatimah Ahmad</div><div class="av-sub">Indonesia</div></div></div></td>
+              <td class="mono">🔐 ••••9977</td>
+              <td>PrimeBuild Corp</td>
+              <td>Block D · Rm 2</td>
+              <td><span class="badge active">Active</span></td>
+              <td><span class="expiry-ok">30 Sep 2024</span></td>
+              <td><span style="font-size:12px;color:var(--accent)">8/8</span></td>
+            </tr>
+            <tr>
+              <td><div class="avatar-cell"><div class="av b">SP</div><div><div class="av-name">Suresh Pillai</div><div class="av-sub">India</div></div></div></td>
+              <td class="mono">🔐 ••••2210</td>
+              <td>Apex Construction</td>
+              <td>Block B · Rm 7</td>
+              <td><span class="badge pending">Pending</span></td>
+              <td><span class="expiry-ok">15 Aug 2024</span></td>
+              <td><span style="font-size:12px;color:var(--amber)">2/8 !</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── CLIENTS ── -->
+    <div class="page" id="page-clients">
+      <div class="table-card">
+        <div class="table-header">
+          <h3>Clients</h3>
+          <div class="tabs" style="margin:0;margin-left:16px">
+            <div class="tab active" style="padding:5px 12px;font-size:12px">All (34)</div>
+            <div class="tab" style="padding:5px 12px;font-size:12px">Companies (22)</div>
+            <div class="tab" style="padding:5px 12px;font-size:12px">Individual (12)</div>
+          </div>
+          <div class="ml-auto">
+            <button class="btn btn-primary" onclick="openModal('addClientModal')">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Client
+            </button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Client</th><th>Type</th><th>Reg. No.</th><th>Contact</th><th>Expats</th><th>Dorm</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="avatar-cell"><div class="av g">AC</div><div><div class="av-name">Apex Construction Sdn Bhd</div><div class="av-sub">Since Jan 2022</div></div></div></td>
+              <td><span class="badge company">Company</span></td>
+              <td class="mono">🔐 ••••8821</td>
+              <td class="muted">🔐 Ahmad Razali</td>
+              <td style="font-weight:600">48</td>
+              <td>Block A, B</td>
+              <td><span class="badge active">Active</span></td>
+            </tr>
+            <tr>
+              <td><div class="avatar-cell"><div class="av b">BC</div><div><div class="av-name">BuildCo Sdn Bhd</div><div class="av-sub">Since Mar 2023</div></div></div></td>
+              <td><span class="badge company">Company</span></td>
+              <td class="mono">🔐 ••••4402</td>
+              <td class="muted">🔐 Lee Mei Ling</td>
+              <td style="font-weight:600">31</td>
+              <td>Block C</td>
+              <td><span class="badge active">Active</span></td>
+            </tr>
+            <tr>
+              <td><div class="avatar-cell"><div class="av o">DL</div><div><div class="av-name">Mr. David Lim</div><div class="av-sub">Since Jun 2023</div></div></div></td>
+              <td><span class="badge individual">Individual</span></td>
+              <td class="mono">🔐 ••••7711</td>
+              <td class="muted">🔐 David Lim</td>
+              <td style="font-weight:600">4</td>
+              <td>Block C</td>
+              <td><span class="badge active">Active</span></td>
+            </tr>
+            <tr>
+              <td><div class="avatar-cell"><div class="av r">PC</div><div><div class="av-name">PrimeBuild Corp</div><div class="av-sub">Since Sep 2021</div></div></div></td>
+              <td><span class="badge company">Company</span></td>
+              <td class="mono">🔐 ••••9930</td>
+              <td class="muted">🔐 Priya Nair</td>
+              <td style="font-weight:600">22</td>
+              <td>Block D</td>
+              <td><span class="badge active">Active</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── DORMITORIES ── -->
+    <div class="page" id="page-dormitories">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="tabs" style="margin:0"><div class="tab active" style="padding:5px 12px;font-size:12px">All (8)</div><div class="tab" style="padding:5px 12px;font-size:12px">Active (7)</div><div class="tab" style="padding:5px 12px;font-size:12px">Full</div></div>
+        <button class="btn btn-primary" onclick="openModal('addDormModal')">
+          <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Dormitory
+        </button>
+      </div>
+      <div class="dorm-grid">
+        <div class="dorm-card" onclick="openExpat('DORMA')">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div><div class="dorm-name">Block A</div><div class="dorm-addr">Jalan Kuching, Kuala Lumpur</div></div>
+            <span class="badge active">Active</span>
+          </div>
+          <div style="display:flex;gap:20px;margin:10px 0">
+            <div><div class="dorm-stat-val">82</div><div class="dorm-stat-label">Occupants</div></div>
+            <div><div class="dorm-stat-val">100</div><div class="dorm-stat-label">Capacity</div></div>
+            <div><div class="dorm-stat-val">2</div><div class="dorm-stat-label">Clients</div></div>
+          </div>
+          <div class="occ-bar"><div class="occ-fill" style="width:82%"></div></div>
+          <div class="dorm-clients"><span class="client-chip">Apex Construction</span><span class="client-chip">BuildCo</span></div>
+        </div>
+        <div class="dorm-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div><div class="dorm-name">Block B</div><div class="dorm-addr">Puchong Jaya, Selangor</div></div>
+            <span class="badge active">Active</span>
+          </div>
+          <div style="display:flex;gap:20px;margin:10px 0">
+            <div><div class="dorm-stat-val">54</div><div class="dorm-stat-label">Occupants</div></div>
+            <div><div class="dorm-stat-val">80</div><div class="dorm-stat-label">Capacity</div></div>
+            <div><div class="dorm-stat-val">1</div><div class="dorm-stat-label">Client</div></div>
+          </div>
+          <div class="occ-bar"><div class="occ-fill" style="width:67%"></div></div>
+          <div class="dorm-clients"><span class="client-chip">Apex Construction</span></div>
+        </div>
+        <div class="dorm-card" style="border-color:rgba(139,26,26,0.25)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div><div class="dorm-name">Block C</div><div class="dorm-addr">Shah Alam, Selangor</div></div>
+            <span class="badge expired">Near Full</span>
+          </div>
+          <div style="display:flex;gap:20px;margin:10px 0">
+            <div><div class="dorm-stat-val" style="color:var(--accent2)">111</div><div class="dorm-stat-label">Occupants</div></div>
+            <div><div class="dorm-stat-val">120</div><div class="dorm-stat-label">Capacity</div></div>
+            <div><div class="dorm-stat-val">2</div><div class="dorm-stat-label">Clients</div></div>
+          </div>
+          <div class="occ-bar"><div class="occ-fill" style="width:92%;background:var(--accent2)"></div></div>
+          <div class="dorm-clients"><span class="client-chip">BuildCo</span><span class="client-chip">Mr. David Lim</span></div>
+        </div>
+        <div class="dorm-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div><div class="dorm-name">Block D</div><div class="dorm-addr">Klang, Selangor</div></div>
+            <span class="badge pending">Low Use</span>
+          </div>
+          <div style="display:flex;gap:20px;margin:10px 0">
+            <div><div class="dorm-stat-val">11</div><div class="dorm-stat-label">Occupants</div></div>
+            <div><div class="dorm-stat-val">60</div><div class="dorm-stat-label">Capacity</div></div>
+            <div><div class="dorm-stat-val">1</div><div class="dorm-stat-label">Client</div></div>
+          </div>
+          <div class="occ-bar"><div class="occ-fill" style="width:18%"></div></div>
+          <div class="dorm-clients"><span class="client-chip">PrimeBuild Corp</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TRANSFERS ── -->
+    <div class="page" id="page-transfers">
+      <div class="table-card" style="margin-bottom:16px">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border);background:var(--amber-light)">
+          <span style="font-size:13px;font-weight:600;color:var(--amber)">⏳ 3 transfers awaiting your approval</span>
+        </div>
+        <table>
+          <thead><tr><th>Expat</th><th>Change</th><th>From</th><th>To</th><th>Requested By</th><th>Reason</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="avatar-cell"><div class="av b">RK</div><div><div class="av-name">Raj Kumar</div></div></div></td>
+              <td><span style="font-size:11px;background:var(--blue-light);color:var(--blue);padding:2px 8px;border-radius:10px">Dormitory</span></td>
+              <td class="muted">Block A</td>
+              <td class="muted">Block C</td>
+              <td class="muted">Sarah K.</td>
+              <td class="muted" style="font-size:12px">Client request</td>
+              <td>
+                <div style="display:flex;gap:6px">
+                  <button class="btn-approve" onclick="approveTransfer(this)">Approve</button>
+                  <button class="btn-reject">Reject</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><div class="avatar-cell"><div class="av g">SP</div><div><div class="av-name">Suresh Pillai</div></div></div></td>
+              <td><span style="font-size:11px;background:var(--accent2-light);color:var(--accent2);padding:2px 8px;border-radius:10px">Client</span></td>
+              <td class="muted">Apex Constr.</td>
+              <td class="muted">BuildCo</td>
+              <td class="muted">Ahmad R.</td>
+              <td class="muted" style="font-size:12px">Contract ended</td>
+              <td>
+                <div style="display:flex;gap:6px">
+                  <button class="btn-approve" onclick="approveTransfer(this)">Approve</button>
+                  <button class="btn-reject">Reject</button>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><div class="avatar-cell"><div class="av r">LW</div><div><div class="av-name">Lin Wei</div></div></div></td>
+              <td><span style="font-size:11px;background:var(--green-light);color:var(--green);padding:2px 8px;border-radius:10px">Both</span></td>
+              <td class="muted">Apex / Blk A</td>
+              <td class="muted">BuildCo / Blk B</td>
+              <td class="muted">Sarah K.</td>
+              <td class="muted" style="font-size:12px">Mutual agreement</td>
+              <td>
+                <div style="display:flex;gap:6px">
+                  <button class="btn-approve" onclick="approveTransfer(this)">Approve</button>
+                  <button class="btn-reject">Reject</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-card">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border)"><span style="font-weight:600;font-size:13px">Transfer History</span></div>
+        <table>
+          <thead><tr><th>Expat</th><th>Change</th><th>From → To</th><th>Approved By</th><th>Date</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="avatar-cell"><div class="av o">FA</div><div class="av-name">Fatimah Ahmad</div></div></td>
+              <td class="muted">Dormitory</td><td class="muted" style="font-size:12px">Dorm B → Dorm A</td>
+              <td class="muted">Sarah K.</td><td class="muted">14 Mar 2024</td>
+              <td><span class="badge active">Completed</span></td>
+            </tr>
+            <tr>
+              <td><div class="avatar-cell"><div class="av g">MH</div><div class="av-name">Mohammed Hassan</div></div></td>
+              <td class="muted">Client</td><td class="muted" style="font-size:12px">PrimeBuild → Apex</td>
+              <td class="muted">Manager</td><td class="muted">02 Jan 2024</td>
+              <td><span class="badge active">Completed</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── CHECKLIST TEMPLATES ── -->
+    <div class="page" id="page-checklist-templates">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <p style="color:var(--text2);font-size:13px">Configure onboarding checklist items for each entity type. Changes apply to new onboardings.</p>
+        <button class="btn btn-primary" onclick="openModal('addChecklistItemModal')">
+          <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#fff;stroke-width:2;fill:none"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Item
+        </button>
+      </div>
+      <div class="template-group">
+        <div class="template-group-header">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>
+          Expat Onboarding (8 items)
+        </div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Passport copy received & verified</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Work permit / visa application submitted</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Dormitory assigned & room confirmed</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">FOMEMA medical examination booked</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Client contract signed</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Levy payment confirmed</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Insurance policy uploaded</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Fingerprint & biometrics registered</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      </div>
+      <div class="template-group">
+        <div class="template-group-header">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--blue);display:inline-block"></span>
+          Company Client Onboarding (5 items)
+        </div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Business registration documents verified</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Service agreement signed</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Dormitory allocation confirmed</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Quota / levy approval obtained</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="template-item"><span class="drag-handle">⠿</span><span class="template-item-text">Primary contact details verified</span><button class="template-remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+      </div>
+    </div>
+
+    <!-- ── AUDIT TRAIL ── -->
+    <div class="page" id="page-audit">
+      <div class="table-card">
+        <div class="table-header">
+          <h3>Audit Trail</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="form-input" style="width:130px;padding:6px 10px;font-size:12px">
+              <option>All actions</option><option>CREATE</option><option>UPDATE</option><option>DELETE</option>
+            </select>
+            <select class="form-input" style="width:130px;padding:6px 10px;font-size:12px">
+              <option>All tables</option><option>expats</option><option>documents</option><option>transfers</option>
+            </select>
+            <input type="date" class="form-input" style="width:140px;padding:6px 10px;font-size:12px" value="2024-03-15">
+          </div>
+          <div class="ml-auto">
+            <button class="btn btn-outline" style="font-size:12px">
+              <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export CSV
+            </button>
+          </div>
+        </div>
+        <table class="audit-table">
+          <thead><tr><th>Timestamp</th><th>Action</th><th>Table · Record</th><th>Field</th><th>From</th><th>To</th><th>By</th><th>IP</th></tr></thead>
+          <tbody>
+            <tr><td>2024-03-15 09:41:22</td><td><span class="action-badge update">UPDATE</span></td><td>expats · MH</td><td>status</td><td><span class="audit-from">pending</span></td><td><span class="audit-to">active</span></td><td>Sarah K.</td><td class="muted">10.0.0.12</td></tr>
+            <tr><td>2024-03-15 09:55:04</td><td><span class="action-badge create">CREATE</span></td><td>documents · MH</td><td>—</td><td><span class="audit-from">null</span></td><td><span class="audit-to">WP-8811.pdf</span></td><td>Sarah K.</td><td class="muted">10.0.0.12</td></tr>
+            <tr><td>2024-03-15 10:02:11</td><td><span class="action-badge update">UPDATE</span></td><td>expats · RK</td><td>dormitory_id</td><td><span class="audit-from">Block A</span></td><td><span class="audit-to">Block C</span></td><td>Ahmad R.</td><td class="muted">10.0.0.19</td></tr>
+            <tr><td>2024-03-15 11:30:55</td><td><span class="action-badge update">UPDATE</span></td><td>checklist · NVA</td><td>item_3.status</td><td><span class="audit-from">pending</span></td><td><span class="audit-to">done</span></td><td>Sarah K.</td><td class="muted">10.0.0.12</td></tr>
+            <tr><td>2024-03-16 08:14:33</td><td><span class="action-badge create">CREATE</span></td><td>transfers · RK</td><td>—</td><td><span class="audit-from">null</span></td><td><span class="audit-to">pending</span></td><td>Ahmad R.</td><td class="muted">10.0.0.19</td></tr>
+            <tr><td>2024-03-16 14:17:09</td><td><span class="action-badge delete">DELETE</span></td><td>documents · FA</td><td>deleted_at</td><td><span class="audit-from">null</span></td><td><span class="audit-to">2024-03-16</span></td><td>Sarah K.</td><td class="muted">10.0.0.12</td></tr>
+            <tr><td>2024-03-17 09:00:01</td><td><span class="action-badge update">UPDATE</span></td><td>expats · LW</td><td>visa_expiry</td><td><span class="audit-from">2023-06-05</span></td><td><span class="audit-to">2024-06-05</span></td><td>System</td><td class="muted">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── EXPAT DETAIL PANEL ── -->
+<div class="detail-overlay" id="expatDetail" onclick="closeDetail(event)">
+  <div class="detail-panel">
+    <div class="detail-top">
+      <div class="detail-avatar g" style="background:var(--accent-light);color:var(--accent);font-size:16px;font-weight:600">MH</div>
+      <div>
+        <div class="detail-name">Mohammed Hassan</div>
+        <div class="detail-meta"><span class="badge active">Active</span><span style="font-family:monospace;font-size:11px">BD-2024-001</span></div>
+      </div>
+      <button class="close-btn" onclick="document.getElementById('expatDetail').classList.remove('open')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="detail-body">
+
+      <!-- Personal Info -->
+      <div class="detail-section">
+        <div class="detail-section-title">Personal Information</div>
+        <div class="detail-row"><span class="detail-label">Passport No.</span><span class="detail-val enc">🔐 ••••4521</span></div>
+        <div class="detail-row"><span class="detail-label">Nationality</span><span class="detail-val">Bangladesh 🇧🇩</span></div>
+        <div class="detail-row"><span class="detail-label">Date of Birth</span><span class="detail-val enc">🔐 ••/••/19••</span></div>
+        <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-val enc">🔐 ••• •••• ••91</span></div>
+      </div>
+
+      <!-- Assignment -->
+      <div class="detail-section">
+        <div class="detail-section-title">Current Assignment</div>
+        <div class="detail-row"><span class="detail-label">Client</span><span class="detail-val">Apex Construction Sdn Bhd</span></div>
+        <div class="detail-row"><span class="detail-label">Dormitory</span><span class="detail-val">Block B · Room 12</span></div>
+        <div class="detail-row"><span class="detail-label">Visa Expiry</span><span class="detail-val" style="color:var(--accent2)">⚠ 28 Jun 2024</span></div>
+        <div class="detail-row"><span class="detail-label">Status since</span><span class="detail-val">15 Mar 2024 · by Sarah K.</span></div>
+      </div>
+
+      <!-- Checklist -->
+      <div class="detail-section">
+        <div class="detail-section-title">Onboarding Checklist</div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:6px"><span>Progress</span><span style="font-weight:600;color:var(--accent)">5 / 8</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:62%"></div></div>
+        <div class="checklist-item-d">
+          <div class="cb done" onclick="toggleCheck(this)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="cl-text done-text">Passport copy received</div>
+          <div class="cl-meta">Sarah K · Mar 10</div>
+        </div>
+        <div class="checklist-item-d">
+          <div class="cb done" onclick="toggleCheck(this)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="cl-text done-text">Work permit applied</div>
+          <div class="cl-meta">Ahmad R · Mar 11</div>
+        </div>
+        <div class="checklist-item-d">
+          <div class="cb done" onclick="toggleCheck(this)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="cl-text done-text">Dormitory assigned</div>
+          <div class="cl-meta">Sarah K · Mar 12</div>
+        </div>
+        <div class="checklist-item-d">
+          <div class="cb done" onclick="toggleCheck(this)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="cl-text done-text">Medical check completed</div>
+          <div class="cl-meta">Ahmad R · Mar 13</div>
+        </div>
+        <div class="checklist-item-d">
+          <div class="cb done" onclick="toggleCheck(this)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="cl-text done-text">Client contract signed</div>
+          <div class="cl-meta">Sarah K · Mar 14</div>
+        </div>
+        <div class="checklist-item-d">
+          <div class="cb partial" onclick="toggleCheck(this)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="cl-text" style="color:var(--amber)">Levy payment confirmation</div>
+          <div class="cl-meta" style="color:var(--amber)">Pending</div>
+        </div>
+        <div class="checklist-item-d">
+          <div class="cb" onclick="toggleCheck(this)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="cl-text" style="color:var(--text3)">FOMEMA registration</div>
+          <div class="cl-meta">—</div>
+        </div>
+        <div class="checklist-item-d">
+          <div class="cb" onclick="toggleCheck(this)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="cl-text" style="color:var(--text3)">Insurance policy uploaded</div>
+          <div class="cl-meta">—</div>
+        </div>
+      </div>
+
+      <!-- Documents -->
+      <div class="detail-section">
+        <div style="display:flex;align-items:center;margin-bottom:10px">
+          <div class="detail-section-title" style="margin:0">Documents</div>
+          <button class="btn btn-outline" style="margin-left:auto;font-size:11px;padding:4px 10px">+ Upload</button>
+          <button class="btn btn-outline" style="margin-left:6px;font-size:11px;padding:4px 10px">⬇ ZIP</button>
+        </div>
+        <div class="doc-row">
+          <div class="doc-icon">📄</div>
+          <div><div class="doc-name">Work Permit WP-8811</div><div class="doc-exp" style="color:var(--accent2)">⚠ Expires 28 Jun 2024</div></div>
+          <button class="doc-dl">Download</button>
+        </div>
+        <div class="doc-row">
+          <div class="doc-icon">🛂</div>
+          <div><div class="doc-name">Passport Copy</div><div class="doc-exp" style="color:var(--text3)">Expires 14 Oct 2027</div></div>
+          <button class="doc-dl">Download</button>
+        </div>
+        <div class="doc-row">
+          <div class="doc-icon">🏥</div>
+          <div><div class="doc-name">FOMEMA Certificate</div><div class="doc-exp" style="color:var(--text3)">Expires 10 Mar 2025</div></div>
+          <button class="doc-dl">Download</button>
+        </div>
+      </div>
+
+      <!-- Transfer History -->
+      <div class="detail-section">
+        <div class="detail-section-title">Transfer History</div>
+        <div style="border-left:2px solid var(--border);padding-left:14px">
+          <div class="transfer-item">
+            <div class="transfer-date">15 Mar 2024 · Dormitory transfer</div>
+            <div class="transfer-title">Block A → Block B</div>
+            <div class="transfer-desc">Approved by Sarah K. · Reason: Client request</div>
+          </div>
+          <div class="transfer-item">
+            <div class="transfer-date">02 Jan 2024 · Client transfer</div>
+            <div class="transfer-title">PrimeBuild Corp → Apex Construction</div>
+            <div class="transfer-desc">Approved by Manager · Reason: Contract end</div>
+          </div>
+          <div class="transfer-item">
+            <div class="transfer-date">10 Aug 2023 · Initial assignment</div>
+            <div class="transfer-title">Onboarded</div>
+            <div class="transfer-desc">Assigned to PrimeBuild Corp · Block A Room 4</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-primary" style="flex:1" onclick="openModal('transferModal')">Request Transfer</button>
+        <button class="btn btn-outline" style="flex:1">Edit Profile</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODALS ── -->
+<div class="modal-overlay" id="addExpatModal" onclick="closeModal(event,'addExpatModal')">
+  <div class="modal">
+    <div class="modal-header"><h3>Add New Expat</h3><button class="close-btn" style="margin-left:auto" onclick="closeModal(null,'addExpatModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Full Name <span class="req">*</span></label><input class="form-input" placeholder="As per passport"></div>
+        <div class="form-group"><label class="form-label">Nationality <span class="req">*</span></label><select class="form-input"><option>Bangladesh</option><option>India</option><option>Vietnam</option><option>Indonesia</option><option>China</option><option>Nepal</option><option>Myanmar</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Passport Number <span class="req">*</span></label><input class="form-input" placeholder="Passport no."><div class="enc-hint">🔐 Field will be encrypted</div></div>
+        <div class="form-group"><label class="form-label">Date of Birth <span class="req">*</span></label><input class="form-input" type="date"><div class="enc-hint">🔐 Field will be encrypted</div></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Phone <span class="req">*</span></label><input class="form-input" placeholder="+60 12 345 6789"><div class="enc-hint">🔐 Field will be encrypted</div></div>
+        <div class="form-group"><label class="form-label">Visa / Permit Expiry <span class="req">*</span></label><input class="form-input" type="date"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Assign to Client <span class="req">*</span></label><select class="form-input"><option>Apex Construction Sdn Bhd</option><option>BuildCo Sdn Bhd</option><option>Mr. David Lim</option><option>PrimeBuild Corp</option></select></div>
+        <div class="form-group"><label class="form-label">Assign to Dormitory <span class="req">*</span></label><select class="form-input"><option>Block A</option><option>Block B</option><option>Block C</option><option>Block D</option></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Initial Status</label><select class="form-input"><option>Pending</option><option>Active</option></select></div>
+      <div style="background:var(--accent-light);border:1px solid rgba(31,78,61,0.15);border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--accent)">
+        ✓ Onboarding checklist will be auto-created from current template (8 items)
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal(null,'addExpatModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal(null,'addExpatModal')">Create Expat</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="transferModal" onclick="closeModal(event,'transferModal')">
+  <div class="modal">
+    <div class="modal-header"><h3>Request Transfer</h3><button class="close-btn" style="margin-left:auto" onclick="closeModal(null,'transferModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div style="background:var(--amber-light);border:1px solid rgba(138,98,0,0.2);border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--amber);margin-bottom:14px">⚠ Transfer requires Manager approval before taking effect</div>
+      <div class="form-group">
+        <label class="form-label">Transfer Type <span class="req">*</span></label>
+        <select class="form-input"><option>Dormitory only</option><option>Client only</option><option>Both dormitory and client</option></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">New Dormitory</label><select class="form-input"><option>Block A (18 free)</option><option>Block B (26 free)</option><option>Block C (9 free)</option><option>Block D (49 free)</option></select></div>
+        <div class="form-group"><label class="form-label">New Client</label><select class="form-input"><option>Apex Construction</option><option>BuildCo Sdn Bhd</option><option>Mr. David Lim</option><option>PrimeBuild Corp</option></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Reason <span class="req">*</span></label><textarea class="form-input" rows="3" placeholder="Reason for transfer…"></textarea></div>
+      <div class="form-group"><label class="form-label">Effective Date</label><input class="form-input" type="date"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal(null,'transferModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal(null,'transferModal')">Submit for Approval</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addClientModal" onclick="closeModal(event,'addClientModal')">
+  <div class="modal">
+    <div class="modal-header"><h3>Add New Client</h3><button class="close-btn" style="margin-left:auto" onclick="closeModal(null,'addClientModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Client Type <span class="req">*</span></label><select class="form-input" id="clientTypeSelect" onchange="toggleClientFields()"><option value="company">Company</option><option value="individual">Individual</option></select></div>
+      <div class="form-group" id="companyNameField"><label class="form-label">Company Name <span class="req">*</span></label><input class="form-input" placeholder="Company Sdn Bhd"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Registration No. <span class="req">*</span></label><input class="form-input" placeholder="SSM number"><div class="enc-hint">🔐 Encrypted</div></div>
+        <div class="form-group"><label class="form-label">Contact Person <span class="req">*</span></label><input class="form-input" placeholder="Full name"><div class="enc-hint">🔐 Encrypted</div></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Contact Phone <span class="req">*</span></label><input class="form-input" placeholder="+60 …"><div class="enc-hint">🔐 Encrypted</div></div>
+        <div class="form-group"><label class="form-label">Contact Email <span class="req">*</span></label><input class="form-input" placeholder="email@company.com"><div class="enc-hint">🔐 Encrypted</div></div>
+      </div>
+      <div class="form-group"><label class="form-label">Address</label><textarea class="form-input" rows="2" placeholder="Business address"></textarea><div class="enc-hint">🔐 Encrypted</div></div>
+      <div class="form-group"><label class="form-label">Assign Dormitory</label><select class="form-input"><option>Block A</option><option>Block B</option><option>Block C</option><option>Block D</option><option>None yet</option></select></div>
+      <div style="background:var(--accent-light);border:1px solid rgba(31,78,61,0.15);border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--accent)">
+        ✓ Company onboarding checklist will be auto-created (5 items)
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal(null,'addClientModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal(null,'addClientModal')">Create Client</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addDormModal" onclick="closeModal(event,'addDormModal')">
+  <div class="modal">
+    <div class="modal-header"><h3>Add Dormitory</h3><button class="close-btn" style="margin-left:auto" onclick="closeModal(null,'addDormModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Dormitory Name <span class="req">*</span></label><input class="form-input" placeholder="Block E"></div>
+        <div class="form-group"><label class="form-label">Capacity <span class="req">*</span></label><input class="form-input" type="number" placeholder="100"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Address <span class="req">*</span></label><textarea class="form-input" rows="2" placeholder="Full address"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">State</label><select class="form-input"><option>Kuala Lumpur</option><option>Selangor</option><option>Johor</option><option>Penang</option></select></div>
+        <div class="form-group"><label class="form-label">PIC (Person-in-Charge)</label><input class="form-input" placeholder="Name"></div>
+      </div>
+      <div style="background:var(--accent-light);border:1px solid rgba(31,78,61,0.15);border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--accent)">
+        ✓ Dormitory onboarding checklist will be auto-created
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal(null,'addDormModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal(null,'addDormModal')">Create Dormitory</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addChecklistItemModal" onclick="closeModal(event,'addChecklistItemModal')">
+  <div class="modal" style="width:420px">
+    <div class="modal-header"><h3>Add Checklist Item</h3><button class="close-btn" style="margin-left:auto" onclick="closeModal(null,'addChecklistItemModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Entity Type <span class="req">*</span></label><select class="form-input"><option>Expat Onboarding</option><option>Company Client</option><option>Individual Client</option><option>Dormitory</option></select></div>
+      <div class="form-group"><label class="form-label">Checklist Item <span class="req">*</span></label><input class="form-input" placeholder="e.g. Verify insurance documents"></div>
+      <div class="form-group"><label class="form-label">Notes / Instructions</label><textarea class="form-input" rows="2" placeholder="Optional instructions for staff"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal(null,'addChecklistItemModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal(null,'addChecklistItemModal')">Add Item</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="bulkDownloadModal" onclick="closeModal(event,'bulkDownloadModal')">
+  <div class="modal" style="width:420px">
+    <div class="modal-header"><h3>Bulk Document Export</h3><button class="close-btn" style="margin-left:auto" onclick="closeModal(null,'bulkDownloadModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Export For</label><select class="form-input"><option>Selected expats</option><option>All active expats</option><option>By client</option><option>By dormitory</option></select></div>
+      <div class="form-group"><label class="form-label">Document Types</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" checked> Work Permits</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" checked> Passports</label>
+          <label style="display:flex;align-items:center;gap=6px;font-size:13px"><input type="checkbox"> Medical Certs</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox"> Insurance</label>
+        </div>
+      </div>
+      <div style="background:var(--surface2);border-radius:var(--r-sm);padding:10px 12px;font-size:12px;color:var(--text2)">
+        📦 Files will be packaged as a .zip with original filenames. Audit log entry will be created.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal(null,'bulkDownloadModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeModal(null,'bulkDownloadModal')">Download ZIP</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function showOtp(){
+  document.getElementById('loginStep').style.display='none';
+  document.getElementById('otpStep').classList.add('visible');
+}
+function otpNext(el){
+  if(el.value.length===1){const n=el.nextElementSibling;if(n&&n.classList.contains('otp-digit'))n.focus();}
+}
+function doLogin(){
+  document.getElementById('loginPage').style.display='none';
+  document.getElementById('mainArea').style.display='flex';
+}
+
+function nav(page, el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  const pg=document.getElementById('page-'+page);
+  if(pg) pg.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const titles={dashboard:'Dashboard',expats:'Expats',clients:'Clients',dormitories:'Dormitories',transfers:'Transfers','checklist-templates':'Checklist Templates',audit:'Audit Trail'};
+  document.getElementById('pageTitle').textContent=titles[page]||page;
+  // close notif drawer when navigating
+  document.getElementById('notifDrawer').classList.remove('open');
+}
+
+function openExpat(code){
+  document.getElementById('expatDetail').classList.add('open');
+}
+function closeDetail(e){
+  if(e.target===document.getElementById('expatDetail'))
+    document.getElementById('expatDetail').classList.remove('open');
+}
+
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(e,id){
+  if(!e||e.target===document.getElementById(id))
+    document.getElementById(id).classList.remove('open');
+}
+
+function toggleNotif(){
+  document.getElementById('notifDrawer').classList.toggle('open');
+}
+
+function toggleCheck(cb){
+  if(cb.classList.contains('done')){
+    cb.classList.remove('done','partial');
+    cb.nextElementSibling.style.textDecoration='none';
+    cb.nextElementSibling.style.color='';
+  } else {
+    cb.classList.remove('partial');
+    cb.classList.add('done');
+    cb.nextElementSibling.style.textDecoration='line-through';
+    cb.nextElementSibling.style.color='var(--text3)';
+  }
+}
+
+function approveTransfer(btn){
+  const row=btn.closest('tr');
+  const td=row.querySelector('td:last-child');
+  td.innerHTML='<span class="badge active">Approved</span>';
+  const statusTd=row.querySelectorAll('td')[4];
+  if(statusTd&&statusTd.querySelector('.badge')){
+    statusTd.querySelector('.badge').className='badge active';
+    statusTd.querySelector('.badge').textContent='Approved';
+  }
+}
+
+function filterExpats(type, tab){
+  document.querySelectorAll('#page-expats .tab').forEach(t=>t.classList.remove('active'));
+  tab.classList.add('active');
+}
+
+function globalSearch(val){
+  if(!val) return;
+}
+
+function toggleClientFields(){
+  const type=document.getElementById('clientTypeSelect').value;
+  const f=document.getElementById('companyNameField');
+  f.querySelector('label').textContent=type==='company'?'Company Name *':'Full Name *';
+  f.querySelector('input').placeholder=type==='company'?'Company Sdn Bhd':'Full legal name';
+}
+
+// Auto-login for demo
+setTimeout(()=>{
+  document.getElementById('loginPage').style.display='none';
+  document.getElementById('mainArea').style.display='flex';
+},100);
+</script>
+</body>
+</html>
