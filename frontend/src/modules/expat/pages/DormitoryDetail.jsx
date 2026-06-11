@@ -5,6 +5,7 @@ import { ArrowLeft, Download, Upload } from 'lucide-react';
 import { dormitoriesApi, checklistsApi, documentsApi } from '../../../api/index.js';
 import { DocumentUploadDialog } from '../../../components/shared/DocumentUploadDialog.jsx';
 import { AssignChecklistDialog } from '../../../components/shared/AssignChecklistDialog.jsx';
+import { ChecklistCard } from '../../../components/shared/ChecklistCard.jsx';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs.jsx';
 import { Button } from '../../../components/ui/button.jsx';
 import { Badge } from '../../../components/ui/badge.jsx';
@@ -150,15 +151,7 @@ export default function DormitoryDetail() {
               </Button>
             </div>
             {checklistList.map(cl => (
-              <Card key={cl.id}>
-                <CardContent className="pt-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{cl.name}</p>
-                    <p className="text-xs text-slate-500">{cl.items?.length || 0} items</p>
-                  </div>
-                  <StatusBadge status={cl.status} />
-                </CardContent>
-              </Card>
+              <ChecklistCard key={cl.id} checklist={cl} queryKey={['dorm-checklists', id]} />
             ))}
             {checklistList.length === 0 && (
               <p className="text-sm text-slate-400 py-8 text-center">No checklists found.</p>
