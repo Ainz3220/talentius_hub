@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, XCircle, Plus } from 'lucide-react';
-import { transfersApi, expatsApi, dormitoriesApi } from '../../../api/index.js';
+import { transfersApi, expatsApi, dormitoriesApi, clientsApi } from '../../../api/index.js';
 import { DataTable } from '../../../components/shared/DataTable.jsx';
 import { PageHeader } from '../../../components/shared/PageHeader.jsx';
 import { StatusBadge } from '../../../components/shared/StatusBadge.jsx';
@@ -16,8 +16,8 @@ import { formatDate } from '../../../lib/utils.js';
 
 const INITIAL_CREATE = {
   expatId: '',
-  fromDormitoryId: '',
   toDormitoryId: '',
+  toClientId: '',
   reason: '',
   effectiveDate: '',
 };
@@ -50,6 +50,11 @@ export default function Transfers() {
   const { data: dormitories } = useQuery({
     queryKey: ['dorms-all'],
     queryFn: () => dormitoriesApi.list({}),
+  });
+
+  const { data: clients } = useQuery({
+    queryKey: ['clients-all'],
+    queryFn: () => clientsApi.list({}),
   });
 
   const approveMutation = useMutation({
@@ -97,6 +102,7 @@ export default function Transfers() {
 
   const expatList = expats?.data || expats || [];
   const dormList = dormitories?.data || dormitories || [];
+  const clientList = clients?.data || clients || [];
 
   const columns = [
     {
@@ -106,13 +112,21 @@ export default function Transfers() {
     },
     {
       key: 'fromDormitory',
-      header: 'From',
-      render: (v) => v?.name || '—',
+      header: 'Dormitory From → To',
+      render: (v, row) => (
+        <span className="text-xs">
+          {v?.name || '—'} → {row.toDormitory?.name || '—'}
+        </span>
+      ),
     },
     {
-      key: 'toDormitory',
-      header: 'To',
-      render: (v) => v?.name || '—',
+      key: 'fromClient',
+      header: 'Client From → To',
+      render: (v, row) => (
+        <span className="text-xs">
+          {v?.name || '—'} → {row.toClient?.name || '—'}
+        </span>
+      ),
     },
     { key: 'reason', header: 'Reason' },
     {
@@ -213,9 +227,9 @@ export default function Transfers() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>From Dormitory</Label>
-              <Select value={createForm.fromDormitoryId} onValueChange={v => setCreateForm(p => ({ ...p, fromDormitoryId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select dormitory" /></SelectTrigger>
+              <Label>Transfer To Dormitory</Label>
+              <Select value={createForm.toDormitoryId} onValueChange={v => setCreateForm(p => ({ ...p, toDormitoryId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Select dormitory (optional)" /></SelectTrigger>
                 <SelectContent>
                   {Array.isArray(dormList) && dormList.map(d => (
                     <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -224,12 +238,12 @@ export default function Transfers() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>To Dormitory</Label>
-              <Select value={createForm.toDormitoryId} onValueChange={v => setCreateForm(p => ({ ...p, toDormitoryId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select dormitory" /></SelectTrigger>
+              <Label>Transfer To Client</Label>
+              <Select value={createForm.toClientId} onValueChange={v => setCreateForm(p => ({ ...p, toClientId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Select client (optional)" /></SelectTrigger>
                 <SelectContent>
-                  {Array.isArray(dormList) && dormList.map(d => (
-                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  {Array.isArray(clientList) && clientList.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

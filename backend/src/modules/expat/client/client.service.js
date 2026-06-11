@@ -1,22 +1,21 @@
 import { prisma } from '../../../config/db.js';
-import { encrypt, decrypt, maskValue } from '../../../config/encryption.js';
+import { encrypt, decrypt } from '../../../config/encryption.js';
 import { auditCreate, auditUpdate, auditDelete } from '../../../audit/audit.service.js';
 import { getSettings } from '../../settings/settings.service.js';
 
 const ENCRYPTED_FIELDS = ['registrationNo', 'contactName', 'contactPhone', 'contactEmail', 'address'];
 
-function formatClient(c, showFull = false) {
+function formatClient(c) {
   if (!c) return null;
-  const mask = (val) => showFull ? (val ? decrypt(val) : null) : (val ? maskValue(decrypt(val)) : null);
   return {
     id: c.id,
     type: c.type,
     name: c.name,
-    registrationNo: mask(c.registrationNo),
-    contactName: mask(c.contactName),
-    contactPhone: mask(c.contactPhone),
-    contactEmail: mask(c.contactEmail),
-    address: mask(c.address),
+    registrationNo: c.registrationNo ? decrypt(c.registrationNo) : null,
+    contactName: c.contactName ? decrypt(c.contactName) : null,
+    contactPhone: c.contactPhone ? decrypt(c.contactPhone) : null,
+    contactEmail: c.contactEmail ? decrypt(c.contactEmail) : null,
+    address: c.address ? decrypt(c.address) : null,
     status: c.status,
     createdBy: c.createdBy,
     createdAt: c.createdAt,
@@ -45,7 +44,7 @@ export async function listClients(query) {
 export async function getClientById(id) {
   const c = await prisma.client.findUnique({ where: { id, deletedAt: null } });
   if (!c) throw Object.assign(new Error('Client not found'), { status: 404 });
-  return formatClient(c, true);
+  return formatClient(c);
 }
 
 export async function createClient(data, createdBy, ipAddress, userAgent) {
@@ -61,7 +60,7 @@ export async function createClient(data, createdBy, ipAddress, userAgent) {
     },
   });
   await auditCreate({ tableName: 'clients', recordId: c.id, data: { ...data, registrationNo: '[ENCRYPTED]', contactName: '[ENCRYPTED]', contactPhone: '[ENCRYPTED]', contactEmail: '[ENCRYPTED]', address: '[ENCRYPTED]' }, performedBy: createdBy, ipAddress, userAgent });
-  return formatClient(c, true);
+  return formatClient(c);
 }
 
 export async function updateClient(id, data, updatedBy, ipAddress, userAgent) {
@@ -77,7 +76,7 @@ export async function updateClient(id, data, updatedBy, ipAddress, userAgent) {
 
   const updated = await prisma.client.update({ where: { id }, data: update });
   await auditUpdate({ tableName: 'clients', recordId: id, oldData: old, newData: updated, performedBy: updatedBy, ipAddress, userAgent, encryptedFields: ENCRYPTED_FIELDS });
-  return formatClient(updated, true);
+  return formatClient(updated);
 }
 
 export async function deleteClient(id, deletedBy, ipAddress, userAgent) {
@@ -89,7 +88,7 @@ export async function deleteClient(id, deletedBy, ipAddress, userAgent) {
 
 export async function getClientExpats(clientId) {
   const expats = await prisma.expat.findMany({ where: { clientId, deletedAt: null } });
-  return expats.map(e => ({ id: e.id, fullName: maskValue(decrypt(e.fullName)), nationality: e.nationality, status: e.status, permitExpiry: e.permitExpiry }));
+  return expats.map(e => ({ id: e.id, fullName: e.fullName ? decrypt(e.fullName) : null, nationality: e.nationality, status: e.status, permitExpiry: e.permitExpiry }));
 }
 
 export async function revealClientField(id, fieldName, performedBy, ipAddress, userAgent) {

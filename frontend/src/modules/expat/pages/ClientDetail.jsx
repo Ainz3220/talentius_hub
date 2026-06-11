@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Eye, EyeOff, Download, Upload } from 'lucide-react';
+import { ArrowLeft, Download, Upload } from 'lucide-react';
 import { clientsApi, checklistsApi, documentsApi } from '../../../api/index.js';
 import { DocumentUploadDialog } from '../../../components/shared/DocumentUploadDialog.jsx';
+import { AssignChecklistDialog } from '../../../components/shared/AssignChecklistDialog.jsx';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs.jsx';
 import { Button } from '../../../components/ui/button.jsx';
 import { Badge } from '../../../components/ui/badge.jsx';
@@ -14,56 +15,13 @@ import { DataTable } from '../../../components/shared/DataTable.jsx';
 import { useToast } from '../../../components/ui/toast.jsx';
 import { formatDate, daysUntil } from '../../../lib/utils.js';
 
-function RevealField({ clientId, fieldName, label }) {
-  const { toast } = useToast();
-  const [value, setValue] = useState(null);
-  const timerRef = useRef(null);
-
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
-
-  function hide() {
-    setValue(null);
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-  }
-
-  async function reveal() {
-    try {
-      const res = await clientsApi.revealField(clientId, fieldName);
-      if (!res.value) return;
-      setValue(res.value);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(hide, 10000);
-    } catch {
-      toast({ title: 'Failed to reveal field', type: 'error' });
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-sm font-medium text-slate-700">{label}:</span>
-      {value ? (
-        <span className="text-sm font-mono bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-          {value} <span className="text-xs text-amber-600">(hides in 10s)</span>
-        </span>
-      ) : (
-        <span className="text-sm text-slate-400 font-mono">locked ••••••••</span>
-      )}
-      <button
-        onClick={value ? hide : reveal}
-        className="text-xs text-[var(--accent)] hover:underline flex items-center gap-1"
-      >
-        {value ? <EyeOff size={12} /> : <Eye size={12} />}
-        {value ? 'Hide' : 'Reveal'}
-      </button>
-    </div>
-  );
-}
 
 export default function ClientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showUpload, setShowUpload] = useState(false);
+  const [showAssignChecklist, setShowAssignChecklist] = useState(false);
 
   const { data: client, isLoading } = useQuery({
     queryKey: ['client', id],
@@ -151,11 +109,11 @@ export default function ClientDetail() {
                 <span className="font-medium text-slate-700">Type:</span>
                 <span className="ml-2"><StatusBadge status={client.type} /></span>
               </div>
-              <RevealField clientId={id} fieldName="registrationNo" label="Registration No" />
-              <RevealField clientId={id} fieldName="contactEmail" label="Contact Email" />
-              <RevealField clientId={id} fieldName="contactPhone" label="Contact Phone" />
               {[
+                ['registrationNo', 'Registration No'],
                 ['contactName', 'Contact Person'],
+                ['contactEmail', 'Contact Email'],
+                ['contactPhone', 'Contact Phone'],
                 ['address', 'Address'],
               ].map(([k, l]) => (
                 <div key={k} className="text-sm">
@@ -177,6 +135,11 @@ export default function ClientDetail() {
 
         <TabsContent value="checklists">
           <div className="space-y-3">
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => setShowAssignChecklist(true)}>
+                <Upload size={14} /> Assign Checklist
+              </Button>
+            </div>
             {checklistList.map(cl => (
               <Card key={cl.id}>
                 <CardContent className="pt-4 flex items-center justify-between">
@@ -192,6 +155,13 @@ export default function ClientDetail() {
               <p className="text-sm text-slate-400 py-8 text-center">No checklists found.</p>
             )}
           </div>
+          <AssignChecklistDialog
+            open={showAssignChecklist}
+            onOpenChange={setShowAssignChecklist}
+            entityType="CLIENT"
+            entityId={id}
+            queryKey={['client-checklists', id]}
+          />
         </TabsContent>
 
         <TabsContent value="documents">

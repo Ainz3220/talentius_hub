@@ -1,28 +1,11 @@
 import { prisma } from '../../../config/db.js';
-import { encrypt, decrypt, maskValue } from '../../../config/encryption.js';
+import { encrypt, decrypt } from '../../../config/encryption.js';
 import { auditCreate, auditUpdate, auditDelete, writeAuditLog } from '../../../audit/audit.service.js';
 import { getSettings } from '../../settings/settings.service.js';
 import { fireWebhook } from '../../webhooks/webhook.service.js';
 
 const ENCRYPTED_FIELDS = ['fullName', 'passportNo', 'dateOfBirth', 'phone'];
 
-function maskExpat(e) {
-  return {
-    id: e.id,
-    fullName: e.fullName ? maskValue(decrypt(e.fullName)) : null,
-    passportNo: e.passportNo ? maskValue(decrypt(e.passportNo)) : null,
-    dateOfBirth: e.dateOfBirth ? maskValue(decrypt(e.dateOfBirth)) : null,
-    phone: e.phone ? maskValue(decrypt(e.phone)) : null,
-    nationality: e.nationality,
-    status: e.status,
-    clientId: e.clientId,
-    dormitoryId: e.dormitoryId,
-    permitExpiry: e.permitExpiry,
-    statusUpdatedAt: e.statusUpdatedAt,
-    createdAt: e.createdAt,
-    updatedAt: e.updatedAt,
-  };
-}
 
 function decryptExpat(e) {
   return {
@@ -55,7 +38,7 @@ export async function listExpats(query) {
     prisma.expat.count({ where }),
   ]);
 
-  return { data: expats.map(maskExpat), total, page: parseInt(page), limit: pageSize };
+  return { data: expats.map(decryptExpat), total, page: parseInt(page), limit: pageSize };
 }
 
 export async function getExpatById(id) {

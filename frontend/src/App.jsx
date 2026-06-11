@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore.js';
 import { useSettingsStore } from './store/settingsStore.js';
+import api from './api/axios.js';
 import PrivateRoute from './components/shared/PrivateRoute.jsx';
 import Layout from './components/shared/Layout.jsx';
 import LoginPage from './modules/expat/pages/Login.jsx';
@@ -21,6 +22,16 @@ import Settings from './pages/Settings.jsx';
 export default function App() {
   const token = useAuthStore(s => s.token);
   const { loadSettings } = useSettingsStore();
+
+  // Verify session is still valid on every app mount (e.g. after backend restart)
+  useEffect(() => {
+    if (!useAuthStore.getState().token) return;
+    api.get('/auth/me').then(r => {
+      useAuthStore.getState().setUser(r.data);
+    }).catch(() => {
+      // interceptor handles logout + redirect on 401
+    });
+  }, []);
 
   useEffect(() => {
     if (token) loadSettings();

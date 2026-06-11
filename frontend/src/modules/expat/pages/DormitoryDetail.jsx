@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Download, Upload } from 'lucide-react';
 import { dormitoriesApi, checklistsApi, documentsApi } from '../../../api/index.js';
 import { DocumentUploadDialog } from '../../../components/shared/DocumentUploadDialog.jsx';
+import { AssignChecklistDialog } from '../../../components/shared/AssignChecklistDialog.jsx';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs.jsx';
 import { Button } from '../../../components/ui/button.jsx';
 import { Badge } from '../../../components/ui/badge.jsx';
@@ -20,6 +21,7 @@ export default function DormitoryDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showUpload, setShowUpload] = useState(false);
+  const [showAssignChecklist, setShowAssignChecklist] = useState(false);
 
   const { data: dorm, isLoading } = useQuery({
     queryKey: ['dormitory', id],
@@ -142,6 +144,11 @@ export default function DormitoryDetail() {
 
         <TabsContent value="checklists">
           <div className="space-y-3">
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => setShowAssignChecklist(true)}>
+                <Upload size={14} /> Assign Checklist
+              </Button>
+            </div>
             {checklistList.map(cl => (
               <Card key={cl.id}>
                 <CardContent className="pt-4 flex items-center justify-between">
@@ -157,6 +164,13 @@ export default function DormitoryDetail() {
               <p className="text-sm text-slate-400 py-8 text-center">No checklists found.</p>
             )}
           </div>
+          <AssignChecklistDialog
+            open={showAssignChecklist}
+            onOpenChange={setShowAssignChecklist}
+            entityType="DORMITORY"
+            entityId={id}
+            queryKey={['dorm-checklists', id]}
+          />
         </TabsContent>
 
         <TabsContent value="documents">

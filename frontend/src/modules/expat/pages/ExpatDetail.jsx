@@ -1,63 +1,25 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, EyeOff, Download, Check, X, Upload } from 'lucide-react';
-import { expatsApi, checklistsApi, documentsApi } from '../../../api/index.js';
+import { ArrowLeft, Download, Check, X, Upload, Plus, CheckCircle, XCircle, ArrowRight } from 'lucide-react';
+import { expatsApi, checklistsApi, documentsApi, transfersApi, clientsApi, dormitoriesApi } from '../../../api/index.js';
 import { DocumentUploadDialog } from '../../../components/shared/DocumentUploadDialog.jsx';
+import { AssignChecklistDialog } from '../../../components/shared/AssignChecklistDialog.jsx';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs.jsx';
 import { Button } from '../../../components/ui/button.jsx';
 import { Badge } from '../../../components/ui/badge.jsx';
 import { Progress } from '../../../components/ui/progress.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card.jsx';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../components/ui/dialog.jsx';
+import { Input } from '../../../components/ui/input.jsx';
+import { Label } from '../../../components/ui/label.jsx';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../../components/ui/select.jsx';
 import { Skeleton } from '../../../components/ui/skeleton.jsx';
 import { StatusBadge } from '../../../components/shared/StatusBadge.jsx';
 import { useToast } from '../../../components/ui/toast.jsx';
+import { useAuthStore } from '../../../store/authStore.js';
 import { formatDate, daysUntil } from '../../../lib/utils.js';
 
-function RevealField({ expatId, fieldName, label }) {
-  const { toast } = useToast();
-  const [value, setValue] = useState(null);
-  const timerRef = useRef(null);
-
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
-
-  function hide() {
-    setValue(null);
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-  }
-
-  async function reveal() {
-    try {
-      const res = await expatsApi.revealField(expatId, fieldName);
-      if (!res.value) return;
-      setValue(res.value);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(hide, 10000);
-    } catch {
-      toast({ title: 'Failed to reveal field', type: 'error' });
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-sm font-medium text-slate-700">{label}:</span>
-      {value ? (
-        <span className="text-sm font-mono bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-          {value} <span className="text-xs text-amber-600">(hides in 10s)</span>
-        </span>
-      ) : (
-        <span className="text-sm text-slate-400 font-mono">locked ••••••••</span>
-      )}
-      <button
-        onClick={value ? hide : reveal}
-        className="text-xs text-[var(--accent)] hover:underline flex items-center gap-1"
-      >
-        {value ? <EyeOff size={12} /> : <Eye size={12} />}
-        {value ? 'Hide' : 'Reveal'}
-      </button>
-    </div>
-  );
-}
 
 function ChecklistCard({ checklist, expatId }) {
   const { toast } = useToast();
@@ -144,7 +106,15 @@ export default function ExpatDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const user = useAuthStore(s => s.user);
+  const canApprove = user?.role === 'SUPER_ADMIN' || user?.role === 'MANAGER';
   const [showUpload, setShowUpload] = useState(false);
+  const [showAssignChecklist, setShowAssignChecklist] = useState(false);
+  const [showCreateTransfer, setShowCreateTransfer] = useState(false);
+  const [showReject, setShowReject] = useState(false);
+  const [rejectTargetId, setRejectTargetId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [transferForm, setTransferForm] = useState({ toDormitoryId: '', toClientId: '', reason: '', effectiveDate: '' });
 
   const { data: expat, isLoading } = useQuery({
     queryKey: ['expat', id],
@@ -164,6 +134,55 @@ export default function ExpatDetail() {
   const { data: transfers } = useQuery({
     queryKey: ['expat-transfers', id],
     queryFn: () => expatsApi.transfers(id),
+  });
+
+  const { data: dormitories } = useQuery({
+    queryKey: ['dorms-all'],
+    queryFn: () => dormitoriesApi.list({}),
+    enabled: showCreateTransfer,
+  });
+
+  const { data: clients } = useQuery({
+    queryKey: ['clients-all'],
+    queryFn: () => clientsApi.list({}),
+    enabled: showCreateTransfer,
+  });
+
+  const qc = useQueryClient();
+
+  const approveMutation = useMutation({
+    mutationFn: transfersApi.approve,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expat-transfers', id] });
+      qc.invalidateQueries({ queryKey: ['transfers'] });
+      toast({ title: 'Transfer approved', type: 'success' });
+    },
+    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error, type: 'error' }),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: ({ tid, reason }) => transfersApi.reject(tid, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expat-transfers', id] });
+      qc.invalidateQueries({ queryKey: ['transfers'] });
+      setShowReject(false);
+      setRejectReason('');
+      setRejectTargetId(null);
+      toast({ title: 'Transfer rejected', type: 'success' });
+    },
+    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error, type: 'error' }),
+  });
+
+  const createTransferMutation = useMutation({
+    mutationFn: (form) => transfersApi.create({ ...form, expatId: id }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expat-transfers', id] });
+      qc.invalidateQueries({ queryKey: ['transfers'] });
+      setShowCreateTransfer(false);
+      setTransferForm({ toDormitoryId: '', toClientId: '', reason: '', effectiveDate: '' });
+      toast({ title: 'Transfer request submitted', type: 'success' });
+    },
+    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error, type: 'error' }),
   });
 
   if (isLoading) {
@@ -219,13 +238,17 @@ export default function ExpatDetail() {
         <TabsContent value="info">
           <Card>
             <CardContent className="pt-4 space-y-3">
-              <RevealField expatId={id} fieldName="passportNo" label="Passport No" />
-              <RevealField expatId={id} fieldName="phone" label="Phone" />
-              <RevealField expatId={id} fieldName="dateOfBirth" label="Date of Birth" />
-              <div className="text-sm">
-                <span className="font-medium text-slate-700">Nationality:</span>
-                <span className="text-slate-600 ml-1">{expat.nationality || '—'}</span>
-              </div>
+              {[
+                ['Passport No', expat.passportNo],
+                ['Phone', expat.phone],
+                ['Date of Birth', expat.dateOfBirth],
+                ['Nationality', expat.nationality],
+              ].map(([label, val]) => (
+                <div key={label} className="text-sm">
+                  <span className="font-medium text-slate-700">{label}:</span>
+                  <span className="text-slate-600 ml-1">{val || '—'}</span>
+                </div>
+              ))}
               <div className="text-sm">
                 <span className="font-medium text-slate-700">Permit Expiry:</span>
                 <span className="text-slate-600 ml-1">{formatDate(expat.permitExpiry)}</span>
@@ -252,6 +275,11 @@ export default function ExpatDetail() {
 
         <TabsContent value="checklists">
           <div className="space-y-4">
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => setShowAssignChecklist(true)}>
+                <Upload size={14} /> Assign Checklist
+              </Button>
+            </div>
             {checklistList.map(cl => (
               <ChecklistCard key={cl.id} checklist={cl} expatId={id} />
             ))}
@@ -259,6 +287,13 @@ export default function ExpatDetail() {
               <p className="text-sm text-slate-400 py-8 text-center">No checklists found.</p>
             )}
           </div>
+          <AssignChecklistDialog
+            open={showAssignChecklist}
+            onOpenChange={setShowAssignChecklist}
+            entityType="EXPAT"
+            entityId={id}
+            queryKey={['checklists', id]}
+          />
         </TabsContent>
 
         <TabsContent value="documents">
@@ -306,21 +341,172 @@ export default function ExpatDetail() {
 
         <TabsContent value="transfers">
           <div className="space-y-3">
+            <div className="flex justify-end">
+              <Button size="sm" onClick={() => setShowCreateTransfer(true)}>
+                <Plus size={14} /> Request Transfer
+              </Button>
+            </div>
+
             {transferList.map(t => (
               <Card key={t.id}>
-                <CardContent className="pt-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{t.reason || 'Transfer'}</p>
-                    <p className="text-xs text-slate-500">{formatDate(t.createdAt)}</p>
+                <CardContent className="pt-4 space-y-3">
+                  {/* Header row */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{t.reason}</p>
+                      <p className="text-xs text-slate-400">Requested {formatDate(t.createdAt)}</p>
+                    </div>
+                    <StatusBadge status={t.status} />
                   </div>
-                  <StatusBadge status={t.status} />
+
+                  {/* From → To rows */}
+                  <div className="grid grid-cols-1 gap-1.5 text-xs text-slate-600">
+                    {(t.fromDormitory || t.toDormitory) && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-500 w-20 shrink-0">Dormitory</span>
+                        <span>{t.fromDormitory?.name || '—'}</span>
+                        <ArrowRight size={12} className="text-slate-400 shrink-0" />
+                        <span className={t.toDormitory ? 'font-medium text-slate-800' : ''}>{t.toDormitory?.name || '—'}</span>
+                      </div>
+                    )}
+                    {(t.fromClient || t.toClient) && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-500 w-20 shrink-0">Client</span>
+                        <span>{t.fromClient?.name || '—'}</span>
+                        <ArrowRight size={12} className="text-slate-400 shrink-0" />
+                        <span className={t.toClient ? 'font-medium text-slate-800' : ''}>{t.toClient?.name || '—'}</span>
+                      </div>
+                    )}
+                    {t.effectiveDate && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-500 w-20 shrink-0">Effective</span>
+                        <span>{formatDate(t.effectiveDate)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Approval / rejection info */}
+                  {t.status === 'APPROVED' && t.approvedAt && (
+                    <p className="text-xs text-green-600">Approved {formatDate(t.approvedAt)}</p>
+                  )}
+                  {t.status === 'REJECTED' && (
+                    <div className="text-xs text-red-600 space-y-0.5">
+                      <p>Rejected: {t.rejectedReason || '—'}</p>
+                    </div>
+                  )}
+
+                  {/* Approve / Reject actions */}
+                  {t.status === 'PENDING' && canApprove && (
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                        onClick={() => approveMutation.mutate(t.id)}
+                        disabled={approveMutation.isPending}
+                      >
+                        <CheckCircle size={14} /> Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => { setRejectTargetId(t.id); setShowReject(true); }}
+                      >
+                        <XCircle size={14} /> Reject
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
+
             {transferList.length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center">No transfers.</p>
+              <p className="text-sm text-slate-400 py-8 text-center">No transfers yet.</p>
             )}
           </div>
+
+          {/* Create Transfer Dialog */}
+          <Dialog open={showCreateTransfer} onOpenChange={setShowCreateTransfer}>
+            <DialogContent className="max-w-md">
+              <DialogHeader><DialogTitle>Request Transfer</DialogTitle></DialogHeader>
+              <form
+                onSubmit={e => { e.preventDefault(); createTransferMutation.mutate(transferForm); }}
+                className="px-5 space-y-3"
+              >
+                <div className="space-y-1">
+                  <Label>Transfer To Dormitory</Label>
+                  <Select value={transferForm.toDormitoryId} onValueChange={v => setTransferForm(p => ({ ...p, toDormitoryId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select dormitory (optional)" /></SelectTrigger>
+                    <SelectContent>
+                      {(dormitories?.data || dormitories || []).map(d => (
+                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Transfer To Client</Label>
+                  <Select value={transferForm.toClientId} onValueChange={v => setTransferForm(p => ({ ...p, toClientId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select client (optional)" /></SelectTrigger>
+                    <SelectContent>
+                      {(clients?.data || clients || []).map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Reason <span className="text-red-500">*</span></Label>
+                  <Input
+                    value={transferForm.reason}
+                    onChange={e => setTransferForm(p => ({ ...p, reason: e.target.value }))}
+                    placeholder="Reason for transfer"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Effective Date</Label>
+                  <Input
+                    type="date"
+                    value={transferForm.effectiveDate}
+                    onChange={e => setTransferForm(p => ({ ...p, effectiveDate: e.target.value }))}
+                  />
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setShowCreateTransfer(false)}>Cancel</Button>
+                  <Button type="submit" disabled={createTransferMutation.isPending}>
+                    {createTransferMutation.isPending ? 'Submitting...' : 'Submit Request'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Reject Dialog */}
+          <Dialog open={showReject} onOpenChange={v => { setShowReject(v); if (!v) { setRejectReason(''); setRejectTargetId(null); } }}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader><DialogTitle>Reject Transfer</DialogTitle></DialogHeader>
+              <div className="px-5 space-y-3">
+                <Label>Rejection Reason</Label>
+                <Input
+                  value={rejectReason}
+                  onChange={e => setRejectReason(e.target.value)}
+                  placeholder="Provide a reason"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setShowReject(false); setRejectReason(''); setRejectTargetId(null); }}>Cancel</Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => rejectMutation.mutate({ tid: rejectTargetId, reason: rejectReason })}
+                  disabled={!rejectReason.trim() || rejectMutation.isPending}
+                >
+                  {rejectMutation.isPending ? 'Rejecting...' : 'Reject'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
     </div>

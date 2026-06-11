@@ -1,5 +1,5 @@
 import { prisma } from '../../../config/db.js';
-import { decrypt, maskValue } from '../../../config/encryption.js';
+import { decrypt } from '../../../config/encryption.js';
 import { auditCreate, auditUpdate, auditDelete } from '../../../audit/audit.service.js';
 import { getSettings } from '../../settings/settings.service.js';
 
@@ -102,8 +102,8 @@ export async function getDormitoryOccupants(dormitoryId) {
 
   return expats.map((e) => ({
     id: e.id,
-    fullName: e.fullName ? maskValue(decrypt(e.fullName)) : null,
-    passportNo: e.passportNo ? maskValue(decrypt(e.passportNo)) : null,
+    fullName: e.fullName ? decrypt(e.fullName) : null,
+    passportNo: e.passportNo ? decrypt(e.passportNo) : null,
     nationality: e.nationality,
     status: e.status,
     permitExpiry: e.permitExpiry,

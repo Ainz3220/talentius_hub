@@ -10,24 +10,36 @@ api.interceptors.request.use(config => {
 });
 
 let refreshing = null;
+let redirecting = false;
+
+function forceLogout() {
+  if (redirecting) return;
+  redirecting = true;
+  useAuthStore.getState().logout();
+  window.location.replace('/login');
+}
 
 api.interceptors.response.use(
   r => r,
   async err => {
     const original = err.config;
-    if (err.response?.status === 401 && !original._retry) {
+    // Don't intercept the refresh call itself to avoid infinite loops
+    if (err.response?.status === 401 && !original._retry && !original.url?.includes('/auth/refresh')) {
       original._retry = true;
       if (!refreshing) {
         refreshing = api.post('/auth/refresh').then(r => {
           useAuthStore.getState().setToken(r.data.accessToken);
-          refreshing = null;
         }).catch(() => {
-          useAuthStore.getState().logout();
+          forceLogout();
+        }).finally(() => {
           refreshing = null;
-          window.location.href = '/login';
         });
       }
       await refreshing;
+      // If logout was triggered during refresh, don't retry
+      if (!useAuthStore.getState().token) {
+        return Promise.reject(err);
+      }
       return api(original);
     }
     return Promise.reject(err);
