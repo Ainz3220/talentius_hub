@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --accent: #1F4E3D;
+    --accent-foreground: #ffffff;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+    margin: 0;
+  }
+
+  #root {
+    width: 100%;
+    margin: 0;
+    text-align: left;
+    min-height: 100svh;
+  }
+}

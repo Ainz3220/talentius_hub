@@ -1,0 +1,415 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  MANAGER
+  STAFF
+}
+
+enum ClientType {
+  COMPANY
+  INDIVIDUAL
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+}
+
+enum ExpatStatus {
+  PENDING
+  ACTIVE
+  TRANSFERRED
+  EXPIRED
+  REPATRIATED
+}
+
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EntityType {
+  EXPAT
+  CLIENT
+  DORMITORY
+}
+
+enum Scope {
+  GLOBAL
+  CUSTOM
+}
+
+enum ChecklistStatus {
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum ItemStatus {
+  PENDING
+  DONE
+    
+  WAIVED
+}
+
+enum Action {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum WebhookEvent {
+  CHECKLIST_ITEM_OVERDUE
+  CHECKLIST_COMPLETED
+  DOCUMENT_EXPIRING
+  DOCUMENT_EXPIRED
+  TRANSFER_REQUESTED
+  TRANSFER_APPROVED
+  TRANSFER_REJECTED
+  EXPAT_STATUS_CHANGED
+  USER_CREATED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  emailLookupHash     String?   @unique
+  passwordHash        String
+  role                Role
+  isActive            Boolean   @default(false)
+  emailVerified       Boolean   @default(false)
+  emailVerifyToken    String?
+  emailVerifyExpiry   DateTime?
+  otpSecret           String?
+  otpEnabled          Boolean   @default(false)
+  lastLoginAt         DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  refreshToken        String?
+  createdBy           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model SystemSettings {
+  id                         String   @id @default("system")
+  appName                    String   @default("ExpatFlow")
+  appLogoUrl                 String?
+  primaryColor               String   @default("#1F4E3D")
+  docAlertDays1              Int      @default(30)
+  docAlertDays2              Int      @default(7)
+  docAlertRecipients         String[] @default(["MANAGER", "SUPER_ADMIN"])
+  checklistOverdueDays       Int      @default(7)
+  checklistOverdueCheckHours Int      @default(24)
+  checklistOverdueRecipients String[] @default(["MANAGER", "SUPER_ADMIN"])
+  transferRequiresApproval   Boolean  @default(true)
+  transferApprovalRoles      String[] @default(["MANAGER", "SUPER_ADMIN"])
+  emailVerifyTtlHours        Int      @default(48)
+  otpTtlSeconds              Int      @default(300)
+  maxFileSizeMb              Int      @default(10)
+  allowedMimeTypes           String[] @default(["application/pdf", "image/jpeg", "image/png", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
+  loginMaxAttempts           Int      @default(5)
+  loginLockoutMinutes        Int      @default(15)
+  defaultPageSize            Int      @default(25)
+  timezone                   String   @default("Indian/Mauritius")
+  dateFormat                 String   @default("DD MMM YYYY")
+  tableShowAvatars           Boolean  @default(true)
+  tableShowEncryptedMask     Boolean  @default(true)
+  tableCompactMode           Boolean  @default(false)
+  dashboardWidgets           String[] @default(["kpi", "doc-alerts", "transfers", "checklists", "occupancy"])
+  updatedAt                  DateTime @updatedAt
+  updatedBy                  String   @default("SYSTEM")
+
+  @@map("system_settings")
+}
+
+model WebhookConfig {
+  id           String       @id @default(uuid())
+  name         String
+  eventType    WebhookEvent
+  url          String
+  secret       String
+  isActive     Boolean      @default(true)
+  headers      Json?
+  retryCount   Int          @default(3)
+  retryDelayMs Int          @default(2000)
+  createdBy    String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+
+  deliveryLogs WebhookDeliveryLog[]
+
+  @@map("webhook_configs")
+}
+
+model WebhookDeliveryLog {
+  id              String   @id @default(uuid())
+  webhookConfigId String
+  eventType       String
+  payload         Json
+  responseStatus  Int?
+  responseBody    String?
+  durationMs      Int?
+  success         Boolean
+  attemptNumber   Int      @default(1)
+  errorMessage    String?
+  sentAt          DateTime @default(now())
+
+  webhookConfig WebhookConfig @relation(fields: [webhookConfigId], references: [id])
+
+  @@map("webhook_delivery_logs")
+}
+
+model Client {
+  id             String     @id @default(uuid())
+  type           ClientType
+  name           String
+  registrationNo String?
+  contactName    String
+  contactPhone   String
+  contactEmail   String
+  address        String?
+  status         Status
+  createdBy      String
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  expats               Expat[]
+  dormitoryAssignments DormitoryAssignment[]
+
+  @@map("clients")
+}
+
+model Dormitory {
+  id        String    @id @default(uuid())
+  name      String
+  address   String
+  state     String
+  capacity  Int
+  pic       String?
+  status    Status
+  createdBy String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  expats               Expat[]
+  dormitoryAssignments DormitoryAssignment[]
+  transfersFrom        ExpatTransfer[]       @relation("FromDormitory")
+  transfersTo          ExpatTransfer[]       @relation("ToDormitory")
+
+  @@map("dormitories")
+}
+
+model DormitoryAssignment {
+  id          String    @id @default(uuid())
+  dormitoryId String
+  clientId    String
+  assignedAt  DateTime  @default(now())
+  assignedBy  String
+  removedAt   DateTime?
+  removedBy   String?
+  note        String?
+
+  dormitory Dormitory @relation(fields: [dormitoryId], references: [id])
+  client    Client    @relation(fields: [clientId], references: [id])
+
+  @@map("dormitory_assignments")
+}
+
+model Expat {
+  id              String      @id @default(uuid())
+  clientId        String
+  dormitoryId     String
+  fullName        String
+  passportNo      String
+  nationality     String
+  dateOfBirth     String
+  phone           String
+  status          ExpatStatus
+  statusUpdatedAt DateTime?
+  statusUpdatedBy String?
+  permitExpiry    DateTime
+  createdBy       String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  deletedAt       DateTime?
+
+  client    Client    @relation(fields: [clientId], references: [id])
+  dormitory Dormitory @relation(fields: [dormitoryId], references: [id])
+  transfers ExpatTransfer[]
+
+  @@map("expats")
+}
+
+model ExpatTransfer {
+  id              String         @id @default(uuid())
+  expatId         String
+  fromDormitoryId String?
+  toDormitoryId   String?
+  fromClientId    String?
+  toClientId      String?
+  reason          String
+  status          TransferStatus
+  requestedBy     String
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedBy      String?
+  rejectedReason  String?
+  effectiveDate   DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  expat         Expat      @relation(fields: [expatId], references: [id])
+  fromDormitory Dormitory? @relation("FromDormitory", fields: [fromDormitoryId], references: [id])
+  toDormitory   Dormitory? @relation("ToDormitory", fields: [toDormitoryId], references: [id])
+
+  @@map("expat_transfers")
+}
+
+model Document {
+  id               String     @id @default(uuid())
+  entityType       EntityType
+  entityId         String
+  documentType     String
+  originalName     String
+  storedName       String
+  filePath         String
+  mimeType         String
+  fileSizeBytes    Int
+  expiryDate       DateTime
+  alertSent1       Boolean    @default(false)
+  alertSent2       Boolean    @default(false)
+  alertSentExpired Boolean    @default(false)
+  uploadedBy       String
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+
+  @@map("documents")
+}
+
+model ChecklistTemplate {
+  id          String     @id @default(uuid())
+  name        String
+  entityType  EntityType
+  scope       Scope
+  description String?
+  isActive    Boolean    @default(true)
+  createdBy   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?
+
+  items      ChecklistTemplateItem[]
+  checklists Checklist[]
+
+  @@map("checklist_templates")
+}
+
+model ChecklistTemplateItem {
+  id         String    @id @default(uuid())
+  templateId String
+  itemText   String
+  order      Int
+  notes      String?
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  template ChecklistTemplate @relation(fields: [templateId], references: [id])
+
+  @@map("checklist_template_items")
+}
+
+model Checklist {
+  id         String          @id @default(uuid())
+  templateId String?
+  entityType EntityType
+  entityId   String
+  name       String
+  scope      Scope
+  status     ChecklistStatus
+  createdBy  String
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  deletedAt  DateTime?
+
+  template ChecklistTemplate? @relation(fields: [templateId], references: [id])
+  items    ChecklistItem[]
+
+  @@map("checklists")
+}
+
+model ChecklistItem {
+  id               String     @id @default(uuid())
+  checklistId      String
+  itemText         String
+  order            Int
+  notes            String?
+  status           ItemStatus @default(PENDING)
+  completedBy      String?
+  completedAt      DateTime?
+  waivedBy         String?
+  waivedReason     String?
+  overdueSince     DateTime?
+  overdueAlertSent Boolean    @default(false)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  checklist Checklist @relation(fields: [checklistId], references: [id])
+
+  @@map("checklist_items")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  tableName   String
+  recordId    String
+  fieldName   String
+  valueFrom   String?
+  valueTo     String?
+  action      Action
+  performedBy String
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String
+  type       String
+  title      String
+  body       String
+  entityType String?
+  entityId   String?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
