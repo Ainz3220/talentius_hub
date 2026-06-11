@@ -83,21 +83,24 @@ export default function ClientDetail() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => navigate(-1)} className="text-slate-500 hover:text-slate-700">
-          <ArrowLeft size={20} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}>
+          <ArrowLeft size={18} />
         </button>
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--blue-light)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 600 }}>
+          {(client.name || 'C').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
+        </div>
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold text-slate-900">{client.name || 'Client'}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 20, color: 'var(--text)' }}>{client.name || 'Client'}</span>
             {client.clientNo && (
-              <span className="font-mono text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: 'var(--text3)', background: 'var(--surface2)', padding: '2px 8px', borderRadius: 4 }}>
                 {client.clientNo}
               </span>
             )}
           </div>
-          <p className="text-sm text-slate-500">{client.type}</p>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3 }}>{client.type}</div>
         </div>
         <StatusBadge status={client.type} />
       </div>
@@ -111,26 +114,22 @@ export default function ClientDetail() {
         </TabsList>
 
         <TabsContent value="info">
-          <Card>
-            <CardContent className="pt-4 space-y-3">
-              <div className="text-sm">
-                <span className="font-medium text-slate-700">Type:</span>
-                <span className="ml-2"><StatusBadge status={client.type} /></span>
+          <div className="table-card">
+            {[
+              ['Type', null, <StatusBadge key="type" status={client.type} />],
+              ['Registration No', client.registrationNo],
+              ['Contact Person', client.contactName],
+              ['Contact Email', client.contactEmail],
+              ['Contact Phone', client.contactPhone],
+              ['Address', client.address],
+              ['Status', null, <StatusBadge key="status" status={client.status} />],
+            ].map(([label, val, node]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 16px', borderBottom: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 12, color: 'var(--text3)' }}>{label}</span>
+                {node || <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>{val || '—'}</span>}
               </div>
-              {[
-                ['registrationNo', 'Registration No'],
-                ['contactName', 'Contact Person'],
-                ['contactEmail', 'Contact Email'],
-                ['contactPhone', 'Contact Phone'],
-                ['address', 'Address'],
-              ].map(([k, l]) => (
-                <div key={k} className="text-sm">
-                  <span className="font-medium text-slate-700">{l}:</span>
-                  <span className="text-slate-600 ml-1">{client[k] || '—'}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+            ))}
+          </div>
         </TabsContent>
 
         <TabsContent value="expats">

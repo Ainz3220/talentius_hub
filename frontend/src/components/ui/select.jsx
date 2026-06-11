@@ -10,14 +10,15 @@ export function SelectTrigger({ className, children, ...props }) {
   return (
     <RadixSelect.Trigger
       className={cn(
-        'flex h-9 w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50',
+        'flex h-9 w-full items-center justify-between rounded-[var(--r-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-[13px] focus:outline-none focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50',
         className
       )}
+      style={{ fontFamily: 'inherit', color: 'var(--text)' }}
       {...props}
     >
       {children}
       <RadixSelect.Icon>
-        <ChevronDown size={14} className="text-slate-500" />
+        <ChevronDown size={14} style={{ color: 'var(--text3)' }} />
       </RadixSelect.Icon>
     </RadixSelect.Trigger>
   );
@@ -31,10 +32,11 @@ export function SelectContent({ className, children, ...props }) {
   return (
     <RadixSelect.Portal>
       <RadixSelect.Content
-        className={cn('z-50 min-w-[8rem] overflow-hidden rounded-md border bg-white shadow-md', className)}
+        className={cn('z-50 min-w-[8rem] overflow-hidden border border-[var(--border)] bg-[var(--surface)] shadow-md', className)}
+        style={{ borderRadius: 'var(--r-sm)' }}
         {...props}
       >
-        <RadixSelect.Viewport className="p-1">{children}</RadixSelect.Viewport>
+        <RadixSelect.Viewport style={{ padding: 4 }}>{children}</RadixSelect.Viewport>
       </RadixSelect.Content>
     </RadixSelect.Portal>
   );
@@ -44,9 +46,10 @@ export function SelectItem({ className, children, ...props }) {
   return (
     <RadixSelect.Item
       className={cn(
-        'relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex w-full cursor-default select-none items-center rounded px-2 py-1.5 text-[13px] outline-none focus:bg-[var(--surface2)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className
       )}
+      style={{ fontFamily: 'inherit', color: 'var(--text)' }}
       {...props}
     >
       <RadixSelect.ItemText>{children}</RadixSelect.ItemText>
@@ -59,9 +62,9 @@ export function SelectGroup(props) {
 }
 
 export function SelectLabel({ className, ...props }) {
-  return <RadixSelect.Label className={cn('px-2 py-1.5 text-xs font-semibold text-slate-500', className)} {...props} />;
+  return <RadixSelect.Label className={cn('px-2 py-1.5 text-xs font-semibold', className)} style={{ color: 'var(--text3)' }} {...props} />;
 }
 
 export function SelectSeparator({ className, ...props }) {
-  return <RadixSelect.Separator className={cn('-mx-1 my-1 h-px bg-slate-200', className)} {...props} />;
+  return <RadixSelect.Separator className={cn('-mx-1 my-1 h-px', className)} style={{ background: 'var(--border)' }} {...props} />;
 }

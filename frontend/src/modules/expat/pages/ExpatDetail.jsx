@@ -133,23 +133,28 @@ export default function ExpatDetail() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => navigate(-1)} className="text-slate-500 hover:text-slate-700">
-          <ArrowLeft size={20} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}>
+          <ArrowLeft size={18} />
         </button>
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--accent-light)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 600 }}>
+          {(expat.fullName || 'E').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
+        </div>
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold text-slate-900">{expat.fullName || 'Expat'}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 20, color: 'var(--text)' }}>{expat.fullName || 'Expat'}</span>
             {expat.expatNo && (
-              <span className="font-mono text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: 'var(--text3)', background: 'var(--surface2)', padding: '2px 8px', borderRadius: 4 }}>
                 {expat.expatNo}
               </span>
             )}
           </div>
-          <p className="text-sm text-slate-500">
-            {expat.nationality} · Permit expires {formatDate(expat.permitExpiry)}
-          </p>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3, display: 'flex', gap: 8 }}>
+            <span>{expat.nationality}</span>
+            <span>·</span>
+            <span>Permit expires {formatDate(expat.permitExpiry)}</span>
+          </div>
         </div>
         <StatusBadge status={expat.status} />
       </div>
@@ -163,41 +168,28 @@ export default function ExpatDetail() {
         </TabsList>
 
         <TabsContent value="info">
-          <Card>
-            <CardContent className="pt-4 space-y-3">
+          <div className="table-card">
+            <div style={{ padding: 0 }}>
               {[
                 ['Passport No', expat.passportNo],
                 ['Phone', expat.phone],
                 ['Date of Birth', expat.dateOfBirth],
                 ['Nationality', expat.nationality],
+                ['Permit Expiry', formatDate(expat.permitExpiry)],
+                ['Client', expat.client?.name],
+                ['Dormitory', expat.dormitory?.name],
               ].map(([label, val]) => (
-                <div key={label} className="text-sm">
-                  <span className="font-medium text-slate-700">{label}:</span>
-                  <span className="text-slate-600 ml-1">{val || '—'}</span>
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 16px', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text3)' }}>{label}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500, textAlign: 'right' }}>{val || '—'}</span>
                 </div>
               ))}
-              <div className="text-sm">
-                <span className="font-medium text-slate-700">Permit Expiry:</span>
-                <span className="text-slate-600 ml-1">{formatDate(expat.permitExpiry)}</span>
-              </div>
-              <div className="text-sm flex items-center gap-2">
-                <span className="font-medium text-slate-700">Status:</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 16px' }}>
+                <span style={{ fontSize: 12, color: 'var(--text3)' }}>Status</span>
                 <StatusBadge status={expat.status} />
               </div>
-              {expat.client && (
-                <div className="text-sm">
-                  <span className="font-medium text-slate-700">Client:</span>
-                  <span className="text-slate-600 ml-1">{expat.client.name}</span>
-                </div>
-              )}
-              {expat.dormitory && (
-                <div className="text-sm">
-                  <span className="font-medium text-slate-700">Dormitory:</span>
-                  <span className="text-slate-600 ml-1">{expat.dormitory.name}</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="checklists">

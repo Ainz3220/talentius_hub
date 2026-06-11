@@ -1,8 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, X } from 'lucide-react';
 import { checklistsApi } from '../../api/index.js';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card.jsx';
-import { Progress } from '../ui/progress.jsx';
 import { StatusBadge } from './StatusBadge.jsx';
 import { useToast } from '../ui/toast.jsx';
 import { formatDate } from '../../lib/utils.js';
@@ -21,69 +19,98 @@ export function ChecklistCard({ checklist, queryKey }) {
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">{checklist.name}</CardTitle>
+    <div className="table-card" style={{ marginBottom: 12 }}>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{checklist.name}</span>
           <StatusBadge status={checklist.status} />
         </div>
-        <div className="space-y-1">
-          <Progress value={pct} />
-          <p className="text-xs text-slate-500">{done}/{total} items complete</p>
+        <div style={{ background: 'var(--surface3)', borderRadius: 4, height: 5, marginBottom: 6 }}>
+          <div style={{ width: `${pct}%`, height: 5, borderRadius: 4, background: 'var(--accent)', transition: 'width 0.4s' }} />
         </div>
-      </CardHeader>
-      <CardContent>
-        <ul className="space-y-2">
-          {checklist.items?.map(item => (
-            <li
+        <span style={{ fontSize: 11, color: 'var(--text3)' }}>{done}/{total} items complete</span>
+      </div>
+
+      <div style={{ padding: '8px 0' }}>
+        {(!checklist.items || checklist.items.length === 0) && (
+          <div style={{ padding: '20px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>
+            No items in this checklist.
+          </div>
+        )}
+        {checklist.items?.map(item => {
+          const isOverdue = item.overdueSince && item.status === 'PENDING';
+          const isDone = item.status === 'DONE' || item.status === 'WAIVED';
+          return (
+            <div
               key={item.id}
-              className={`flex items-start gap-3 rounded-md p-2 ${
-                item.overdueSince && item.status === 'PENDING'
-                  ? 'bg-amber-50 border border-amber-200'
-                  : 'bg-slate-50'
-              }`}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+                padding: '8px 16px',
+                borderBottom: '1px solid var(--border)',
+                background: isOverdue ? 'var(--amber-light)' : 'transparent',
+                fontSize: 13,
+              }}
             >
-              <div className="flex-1">
-                <p className={`text-sm ${item.status === 'DONE' ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+              <div
+                style={{
+                  width: 17,
+                  height: 17,
+                  borderRadius: 4,
+                  flexShrink: 0,
+                  border: `1.5px solid ${isDone ? 'var(--accent)' : 'var(--border2)'}`,
+                  background: isDone ? 'var(--accent)' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: 1,
+                }}
+              >
+                {isDone && <Check size={9} color="#fff" strokeWidth={3} />}
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <span style={{ color: isDone ? 'var(--text3)' : 'var(--text)', textDecoration: isDone ? 'line-through' : 'none' }}>
                   {item.itemText}
-                </p>
+                </span>
                 {item.notes && (
-                  <p className="text-xs italic text-slate-400 mt-0.5">{item.notes}</p>
+                  <div style={{ fontSize: 11, fontStyle: 'italic', color: 'var(--text3)', marginTop: 2 }}>{item.notes}</div>
                 )}
-                {item.overdueSince && item.status === 'PENDING' && (
-                  <p className="text-xs text-amber-600 mt-0.5">
+                {isOverdue && (
+                  <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 2 }}>
                     Overdue since {formatDate(item.overdueSince)}
-                  </p>
+                  </div>
                 )}
                 {item.completedAt && (
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
                     Completed {formatDate(item.completedAt)}
-                  </p>
+                  </div>
                 )}
               </div>
+
               {item.status === 'PENDING' && (
-                <div className="flex gap-1 shrink-0">
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                   <button
                     onClick={() => updateItem.mutate({ itemId: item.id, data: { status: 'DONE' } })}
-                    className="h-7 w-7 rounded bg-green-100 text-green-700 hover:bg-green-200 flex items-center justify-center"
+                    title="Mark done"
+                    style={{ width: 26, height: 26, borderRadius: 4, background: 'var(--green-light)', color: 'var(--green)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   >
                     <Check size={12} />
                   </button>
                   <button
                     onClick={() => updateItem.mutate({ itemId: item.id, data: { status: 'WAIVED', waivedReason: 'Waived by user' } })}
-                    className="h-7 w-7 rounded bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center"
+                    title="Waive"
+                    style={{ width: 26, height: 26, borderRadius: 4, background: 'var(--surface2)', color: 'var(--text3)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   >
                     <X size={12} />
                   </button>
                 </div>
               )}
-            </li>
-          ))}
-          {(!checklist.items || checklist.items.length === 0) && (
-            <li className="text-sm text-slate-400 text-center py-4">No items in this checklist.</li>
-          )}
-        </ul>
-      </CardContent>
-    </Card>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

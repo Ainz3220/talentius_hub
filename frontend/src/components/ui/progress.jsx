@@ -4,11 +4,17 @@ import { cn } from '../../lib/utils.js';
 export function Progress({ value, className }) {
   return (
     <RadixProgress.Root
-      className={cn('relative h-2 w-full overflow-hidden rounded-full bg-slate-200', className)}
+      className={cn('relative overflow-hidden rounded-full', className)}
+      style={{ height: 5, width: '100%', background: 'var(--surface3)' }}
     >
       <RadixProgress.Indicator
-        className="h-full bg-[var(--accent)] transition-all"
-        style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
+        style={{
+          height: '100%',
+          background: 'var(--accent)',
+          transition: 'transform 0.4s',
+          transform: `translateX(-${100 - (value || 0)}%)`,
+          borderRadius: 4,
+        }}
       />
     </RadixProgress.Root>
   );

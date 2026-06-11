@@ -1,11 +1,11 @@
 export function PageHeader({ title, description, actions }) {
   return (
-    <div className="flex items-center justify-between mb-6">
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-        {description && <p className="text-sm text-slate-500 mt-0.5">{description}</p>}
+        <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: 22, color: 'var(--text)', lineHeight: 1.2 }}>{title}</h2>
+        {description && <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3 }}>{description}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{actions}</div>}
     </div>
   );
 }

@@ -4,10 +4,10 @@ import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
 const ToastContext = createContext(null);
 
 const icons = { success: CheckCircle, error: AlertCircle, info: Info };
-const colors = {
-  success: 'border-green-500 bg-green-50',
-  error: 'border-red-500 bg-red-50',
-  info: 'border-blue-500 bg-blue-50',
+const toastStyles = {
+  success: { borderLeft: '3px solid var(--green)',  background: 'var(--green-light)',  color: 'var(--green)' },
+  error:   { borderLeft: '3px solid var(--red)',    background: 'var(--red-light)',    color: 'var(--red)' },
+  info:    { borderLeft: '3px solid var(--blue)',   background: 'var(--blue-light)',   color: 'var(--blue)' },
 };
 
 export function ToastProvider({ children }) {
@@ -22,24 +22,34 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-80">
+      <div style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 300, display: 'flex', flexDirection: 'column', gap: 8, width: 320 }}>
         {toasts.map(t => {
           const Icon = icons[t.type] || Info;
+          const style = toastStyles[t.type] || toastStyles.info;
           return (
             <div
               key={t.id}
-              className={`flex gap-3 rounded-lg border-l-4 p-3 shadow-lg bg-white ${colors[t.type] || ''}`}
+              style={{
+                display: 'flex',
+                gap: 10,
+                borderRadius: 'var(--r)',
+                padding: '10px 12px',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                ...style,
+              }}
             >
-              <Icon size={18} className="mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                {t.title && <p className="text-sm font-medium">{t.title}</p>}
-                {t.description && <p className="text-xs text-slate-600 mt-0.5">{t.description}</p>}
+              <Icon size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {t.title && <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{t.title}</p>}
+                {t.description && <p style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>{t.description}</p>}
               </div>
               <button
                 onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
-                className="text-slate-400 hover:text-slate-600"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 2 }}
               >
-                <X size={14} />
+                <X size={13} />
               </button>
             </div>
           );

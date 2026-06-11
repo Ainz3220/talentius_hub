@@ -87,25 +87,28 @@ export default function DormitoryDetail() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => navigate(-1)} className="text-slate-500 hover:text-slate-700">
-          <ArrowLeft size={20} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}>
+          <ArrowLeft size={18} />
         </button>
+        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--accent2-light)', color: 'var(--accent2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 600 }}>
+          {(dorm.name || 'D').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
+        </div>
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold text-slate-900">{dorm.name || 'Dormitory'}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 20, color: 'var(--text)' }}>{dorm.name || 'Dormitory'}</span>
             {dorm.dormitoryNo && (
-              <span className="font-mono text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: 'var(--text3)', background: 'var(--surface2)', padding: '2px 8px', borderRadius: 4 }}>
                 {dorm.dormitoryNo}
               </span>
             )}
           </div>
-          <p className="text-sm text-slate-500">{dorm.address}</p>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3 }}>{dorm.address}</div>
         </div>
-        <Badge variant={pct >= 100 ? 'destructive' : pct >= 80 ? 'warning' : 'success'}>
+        <span className={`badge-dot ${pct >= 100 ? 'badge-expired' : pct >= 80 ? 'badge-pending' : 'badge-active'}`}>
           {dorm.occupantCount || 0}/{dorm.capacity || 0} occupied
-        </Badge>
+        </span>
       </div>
 
       <Tabs defaultValue="info">
@@ -117,29 +120,27 @@ export default function DormitoryDetail() {
         </TabsList>
 
         <TabsContent value="info">
-          <Card>
-            <CardContent className="pt-4 space-y-3">
-              <div className="space-y-1">
-                <p className="text-xs text-slate-500 uppercase tracking-wide">Occupancy</p>
-                <div className="flex items-center gap-3">
-                  <Progress value={pct} className="flex-1" />
-                  <span className="text-sm font-medium">{pct}%</span>
-                </div>
-                <p className="text-xs text-slate-500">{dorm.occupantCount || 0} of {dorm.capacity || 0} spots filled</p>
+          <div className="table-card">
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 8 }}>Occupancy</div>
+              <div style={{ background: 'var(--surface3)', borderRadius: 4, height: 5, marginBottom: 6 }}>
+                <div style={{ width: `${pct}%`, height: 5, borderRadius: 4, background: pct >= 90 ? 'var(--accent2)' : 'var(--accent)', transition: 'width 0.4s' }} />
               </div>
-              {[
-                ['address', 'Address'],
-                ['contactPerson', 'Contact Person'],
-                ['contactPhone', 'Contact Phone'],
-                ['notes', 'Notes'],
-              ].map(([k, l]) => dorm[k] ? (
-                <div key={k} className="text-sm">
-                  <span className="font-medium text-slate-700">{l}:</span>
-                  <span className="text-slate-600 ml-1">{dorm[k]}</span>
-                </div>
-              ) : null)}
-            </CardContent>
-          </Card>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{dorm.occupantCount || 0} of {dorm.capacity || 0} spots filled ({pct}%)</div>
+            </div>
+            {[
+              ['Address', dorm.address],
+              ['Contact Person', dorm.contactPerson || dorm.pic],
+              ['Contact Phone', dorm.contactPhone],
+              ['State', dorm.state],
+              ['Notes', dorm.notes],
+            ].map(([label, val]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 16px', borderBottom: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 12, color: 'var(--text3)' }}>{label}</span>
+                <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>{val || '—'}</span>
+              </div>
+            ))}
+          </div>
         </TabsContent>
 
         <TabsContent value="occupants">
