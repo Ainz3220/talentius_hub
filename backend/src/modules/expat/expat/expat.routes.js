@@ -7,7 +7,6 @@ import {
   handleUpdate,
   handleUpdateStatus,
   handleDelete,
-  handleRevealField,
 } from './expat.controller.js';
 import { handleGetExpatTransfers } from '../transfer/transfer.controller.js';
 
@@ -21,7 +20,6 @@ router.post('/', handleCreate);
 router.patch('/:id', handleUpdate);
 router.patch('/:id/status', handleUpdateStatus);
 router.delete('/:id', handleDelete);
-router.post('/:id/reveal-field', handleRevealField);
 router.get('/:id/transfers', handleGetExpatTransfers);
 
 export default router;

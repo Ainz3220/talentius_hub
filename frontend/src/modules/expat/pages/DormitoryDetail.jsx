@@ -93,7 +93,14 @@ export default function DormitoryDetail() {
           <ArrowLeft size={20} />
         </button>
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{dorm.name || 'Dormitory'}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-slate-900">{dorm.name || 'Dormitory'}</h1>
+            {dorm.dormitoryNo && (
+              <span className="font-mono text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                {dorm.dormitoryNo}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-500">{dorm.address}</p>
         </div>
         <Badge variant={pct >= 100 ? 'destructive' : pct >= 80 ? 'warning' : 'success'}>

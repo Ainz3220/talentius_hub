@@ -9,7 +9,7 @@ async function getEntityName(entityType, entityId) {
   try {
     if (entityType === 'EXPAT') {
       const expat = await prisma.expat.findUnique({ where: { id: entityId }, select: { fullName: true } });
-      return expat?.fullName ? decrypt(expat.fullName) : 'Unknown Expat';
+      return expat?.fullName || 'Unknown Expat';
     }
     if (entityType === 'CLIENT') {
       const client = await prisma.client.findUnique({ where: { id: entityId }, select: { name: true } });

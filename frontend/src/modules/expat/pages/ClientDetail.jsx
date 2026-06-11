@@ -89,7 +89,14 @@ export default function ClientDetail() {
           <ArrowLeft size={20} />
         </button>
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{client.name || 'Client'}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold text-slate-900">{client.name || 'Client'}</h1>
+            {client.clientNo && (
+              <span className="font-mono text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                {client.clientNo}
+              </span>
+            )}
+          </div>
           <p className="text-sm text-slate-500">{client.type}</p>
         </div>
         <StatusBadge status={client.type} />

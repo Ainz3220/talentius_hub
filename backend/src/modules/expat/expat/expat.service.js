@@ -1,20 +1,16 @@
 import { prisma } from '../../../config/db.js';
-import { encrypt, decrypt } from '../../../config/encryption.js';
-import { auditCreate, auditUpdate, auditDelete, writeAuditLog } from '../../../audit/audit.service.js';
+import { auditCreate, auditUpdate, auditDelete } from '../../../audit/audit.service.js';
 import { getSettings } from '../../settings/settings.service.js';
 import { fireWebhook } from '../../webhooks/webhook.service.js';
 
-const ENCRYPTED_FIELDS = ['fullName', 'passportNo', 'dateOfBirth', 'phone'];
-
-
-function decryptExpat(e) {
-  return {
-    ...e,
-    fullName: e.fullName ? decrypt(e.fullName) : null,
-    passportNo: e.passportNo ? decrypt(e.passportNo) : null,
-    dateOfBirth: e.dateOfBirth ? decrypt(e.dateOfBirth) : null,
-    phone: e.phone ? decrypt(e.phone) : null,
-  };
+async function nextExpatNo(tx) {
+  const last = await tx.expat.findFirst({
+    where: { expatNo: { not: null } },
+    orderBy: { expatNo: 'desc' },
+    select: { expatNo: true },
+  });
+  const n = last ? parseInt(last.expatNo.replace('EXP', '')) + 1 : 1;
+  return `EXP${String(n).padStart(5, '0')}`;
 }
 
 export async function listExpats(query) {
@@ -38,7 +34,7 @@ export async function listExpats(query) {
     prisma.expat.count({ where }),
   ]);
 
-  return { data: expats.map(decryptExpat), total, page: parseInt(page), limit: pageSize };
+  return { data: expats, total, page: parseInt(page), limit: pageSize };
 }
 
 export async function getExpatById(id) {
@@ -50,22 +46,21 @@ export async function getExpatById(id) {
     },
   });
   if (!e) throw Object.assign(new Error('Expat not found'), { status: 404 });
-  return decryptExpat(e);
+  return e;
 }
 
 export async function createExpat(data, createdBy, ipAddress, userAgent) {
-  const encryptedData = {
-    ...data,
-    fullName: data.fullName ? encrypt(data.fullName) : null,
-    passportNo: data.passportNo ? encrypt(data.passportNo) : null,
-    dateOfBirth: data.dateOfBirth ? encrypt(data.dateOfBirth) : null,
-    phone: data.phone ? encrypt(data.phone) : null,
-    status: data.status || 'PENDING',
-    permitExpiry: data.permitExpiry ? new Date(data.permitExpiry) : null,
-    createdBy,
-  };
+  const expatNo = await nextExpatNo(prisma);
 
-  const expat = await prisma.expat.create({ data: encryptedData });
+  const expat = await prisma.expat.create({
+    data: {
+      ...data,
+      expatNo,
+      status: data.status || 'PENDING',
+      permitExpiry: data.permitExpiry ? new Date(data.permitExpiry) : null,
+      createdBy,
+    },
+  });
 
   // Auto-start all global EXPAT checklist templates
   const templates = await prisma.checklistTemplate.findMany({
@@ -99,16 +94,9 @@ export async function createExpat(data, createdBy, ipAddress, userAgent) {
     }
   }
 
-  await auditCreate({
-    tableName: 'expats',
-    recordId: expat.id,
-    data: { ...data, fullName: '[ENCRYPTED]', passportNo: '[ENCRYPTED]', dateOfBirth: '[ENCRYPTED]', phone: '[ENCRYPTED]' },
-    performedBy: createdBy,
-    ipAddress,
-    userAgent,
-  });
+  await auditCreate({ tableName: 'expats', recordId: expat.id, data, performedBy: createdBy, ipAddress, userAgent });
 
-  return decryptExpat(expat);
+  return expat;
 }
 
 export async function updateExpat(id, data, updatedBy, ipAddress, userAgent) {
@@ -116,26 +104,13 @@ export async function updateExpat(id, data, updatedBy, ipAddress, userAgent) {
   if (!old) throw Object.assign(new Error('Expat not found'), { status: 404 });
 
   const update = { ...data };
-  if (data.fullName !== undefined) update.fullName = data.fullName ? encrypt(data.fullName) : null;
-  if (data.passportNo !== undefined) update.passportNo = data.passportNo ? encrypt(data.passportNo) : null;
-  if (data.dateOfBirth !== undefined) update.dateOfBirth = data.dateOfBirth ? encrypt(data.dateOfBirth) : null;
-  if (data.phone !== undefined) update.phone = data.phone ? encrypt(data.phone) : null;
   if (data.permitExpiry !== undefined) update.permitExpiry = data.permitExpiry ? new Date(data.permitExpiry) : null;
 
   const updated = await prisma.expat.update({ where: { id }, data: update });
 
-  await auditUpdate({
-    tableName: 'expats',
-    recordId: id,
-    oldData: old,
-    newData: updated,
-    performedBy: updatedBy,
-    ipAddress,
-    userAgent,
-    encryptedFields: ENCRYPTED_FIELDS,
-  });
+  await auditUpdate({ tableName: 'expats', recordId: id, oldData: old, newData: updated, performedBy: updatedBy, ipAddress, userAgent });
 
-  return decryptExpat(updated);
+  return updated;
 }
 
 export async function updateExpatStatus(id, newStatus, updatedBy, ipAddress, userAgent) {
@@ -166,7 +141,7 @@ export async function updateExpatStatus(id, newStatus, updatedBy, ipAddress, use
     changedAt: new Date().toISOString(),
   });
 
-  return decryptExpat(updated);
+  return updated;
 }
 
 export async function deleteExpat(id, deletedBy, ipAddress, userAgent) {
@@ -174,28 +149,4 @@ export async function deleteExpat(id, deletedBy, ipAddress, userAgent) {
   if (!expat) throw Object.assign(new Error('Expat not found'), { status: 404 });
   await prisma.expat.update({ where: { id }, data: { deletedAt: new Date() } });
   await auditDelete({ tableName: 'expats', recordId: id, performedBy: deletedBy, ipAddress, userAgent });
-}
-
-export async function revealExpatField(id, fieldName, performedBy, ipAddress, userAgent) {
-  const allowed = ['fullName', 'passportNo', 'dateOfBirth', 'phone'];
-  if (!allowed.includes(fieldName)) throw Object.assign(new Error('Invalid field'), { status: 400 });
-
-  const expat = await prisma.expat.findUnique({ where: { id, deletedAt: null } });
-  if (!expat) throw Object.assign(new Error('Expat not found'), { status: 404 });
-
-  const value = expat[fieldName] ? decrypt(expat[fieldName]) : null;
-
-  await writeAuditLog({
-    tableName: 'expats',
-    recordId: id,
-    fieldName,
-    valueFrom: null,
-    valueTo: '[REVEALED]',
-    action: 'UPDATE',
-    performedBy,
-    ipAddress,
-    userAgent,
-  });
-
-  return { value };
 }

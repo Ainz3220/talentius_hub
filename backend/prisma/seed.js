@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { encrypt, hashForLookup } from '../src/config/encryption.js';
+// Note: encrypt/hashForLookup used only for user account data (email), not entity fields
 
 const prisma = new PrismaClient();
 const ADMIN_ID = 'superadmin-talentius-fixed-id';
@@ -46,14 +47,14 @@ async function main() {
 
   // ── Dormitories ────────────────────────────────────────────────────────────
   const dorms = [
-    { id: 'dorm-block-a', name: 'Block A', address: 'Jalan Kuching, 51200', state: 'Kuala Lumpur', capacity: 100, pic: 'Razali bin Hamid' },
-    { id: 'dorm-block-b', name: 'Block B', address: 'Jalan Puchong Jaya, 47100', state: 'Selangor', capacity: 80, pic: null },
-    { id: 'dorm-block-c', name: 'Block C', address: 'Jalan Indah 15, Shah Alam', state: 'Selangor', capacity: 120, pic: null },
+    { id: 'dorm-block-a', dormitoryNo: 'DOR0001', name: 'Block A', address: 'Jalan Kuching, 51200', state: 'Kuala Lumpur', capacity: 100, pic: 'Razali bin Hamid' },
+    { id: 'dorm-block-b', dormitoryNo: 'DOR0002', name: 'Block B', address: 'Jalan Puchong Jaya, 47100', state: 'Selangor', capacity: 80, pic: null },
+    { id: 'dorm-block-c', dormitoryNo: 'DOR0003', name: 'Block C', address: 'Jalan Indah 15, Shah Alam', state: 'Selangor', capacity: 120, pic: null },
   ];
   for (const d of dorms) {
     await prisma.dormitory.upsert({
       where: { id: d.id },
-      update: { name: d.name, address: d.address, state: d.state, capacity: d.capacity, pic: d.pic },
+      update: { name: d.name, address: d.address, state: d.state, capacity: d.capacity, pic: d.pic, dormitoryNo: d.dormitoryNo },
       create: { ...d, status: 'ACTIVE', createdBy: ADMIN_ID },
     });
   }
@@ -62,6 +63,7 @@ async function main() {
   const clients = [
     {
       id: 'client-apex',
+      clientNo: 'COM0001',
       type: 'COMPANY',
       name: 'Apex Construction Sdn Bhd',
       registrationNo: 'RC-20190823',
@@ -72,6 +74,7 @@ async function main() {
     },
     {
       id: 'client-buildco',
+      clientNo: 'COM0002',
       type: 'COMPANY',
       name: 'BuildCo Sdn Bhd',
       registrationNo: 'RC-20150612',
@@ -82,6 +85,7 @@ async function main() {
     },
     {
       id: 'client-david',
+      clientNo: 'IND0001',
       type: 'INDIVIDUAL',
       name: 'Mr. David Lim',
       registrationNo: null,
@@ -92,17 +96,14 @@ async function main() {
     },
   ];
   for (const c of clients) {
-    const encrypted = {
-      registrationNo: c.registrationNo ? encrypt(c.registrationNo) : null,
-      contactName: encrypt(c.contactName),
-      contactPhone: encrypt(c.contactPhone),
-      contactEmail: encrypt(c.contactEmail),
-      address: c.address ? encrypt(c.address) : null,
-    };
     await prisma.client.upsert({
       where: { id: c.id },
-      update: encrypted,
-      create: { id: c.id, type: c.type, name: c.name, status: 'ACTIVE', createdBy: ADMIN_ID, ...encrypted },
+      update: {
+        clientNo: c.clientNo, name: c.name,
+        registrationNo: c.registrationNo, contactName: c.contactName,
+        contactPhone: c.contactPhone, contactEmail: c.contactEmail, address: c.address,
+      },
+      create: { id: c.id, clientNo: c.clientNo, type: c.type, name: c.name, status: 'ACTIVE', createdBy: ADMIN_ID, registrationNo: c.registrationNo, contactName: c.contactName, contactPhone: c.contactPhone, contactEmail: c.contactEmail, address: c.address },
     });
   }
 
@@ -110,6 +111,7 @@ async function main() {
   const expats = [
     {
       id: 'expat-mohammed',
+      expatNo: 'EXP00001',
       clientId: 'client-apex',
       dormitoryId: 'dorm-block-a',
       fullName: 'Mohammed Al-Rashid',
@@ -122,6 +124,7 @@ async function main() {
     },
     {
       id: 'expat-linwei',
+      expatNo: 'EXP00002',
       clientId: 'client-apex',
       dormitoryId: 'dorm-block-a',
       fullName: 'Lin Wei',
@@ -134,6 +137,7 @@ async function main() {
     },
     {
       id: 'expat-nguyen',
+      expatNo: 'EXP00003',
       clientId: 'client-david',
       dormitoryId: 'dorm-block-c',
       fullName: 'Nguyen Van An',
@@ -146,24 +150,22 @@ async function main() {
     },
   ];
   for (const e of expats) {
-    const encrypted = {
-      fullName: encrypt(e.fullName),
-      passportNo: encrypt(e.passportNo),
-      dateOfBirth: encrypt(e.dateOfBirth),
-      phone: encrypt(e.phone),
-    };
     await prisma.expat.upsert({
       where: { id: e.id },
-      update: encrypted,
+      update: { expatNo: e.expatNo, fullName: e.fullName, passportNo: e.passportNo, dateOfBirth: e.dateOfBirth, phone: e.phone },
       create: {
         id: e.id,
+        expatNo: e.expatNo,
         clientId: e.clientId,
         dormitoryId: e.dormitoryId,
+        fullName: e.fullName,
+        passportNo: e.passportNo,
+        dateOfBirth: e.dateOfBirth,
+        phone: e.phone,
         nationality: e.nationality,
         status: e.status,
         permitExpiry: e.permitExpiry,
         createdBy: ADMIN_ID,
-        ...encrypted,
       },
     });
   }

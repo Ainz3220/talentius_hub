@@ -181,6 +181,7 @@ model WebhookDeliveryLog {
 
 model Client {
   id             String     @id @default(uuid())
+  clientNo       String?    @unique
   type           ClientType
   name           String
   registrationNo String?
@@ -201,14 +202,15 @@ model Client {
 }
 
 model Dormitory {
-  id        String    @id @default(uuid())
-  name      String
-  address   String
-  state     String
-  capacity  Int
-  pic       String?
-  status    Status
-  createdBy String
+  id          String    @id @default(uuid())
+  dormitoryNo String?   @unique
+  name        String
+  address     String
+  state       String
+  capacity    Int
+  pic         String?
+  status      Status
+  createdBy   String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -239,6 +241,7 @@ model DormitoryAssignment {
 
 model Expat {
   id              String      @id @default(uuid())
+  expatNo         String?     @unique
   clientId        String
   dormitoryId     String
   fullName        String

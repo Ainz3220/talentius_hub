@@ -39,9 +39,3 @@ export async function deleteClientHandler(req, res, next) {
 export async function getClientExpatsHandler(req, res, next) {
   try { res.json(await clientService.getClientExpats(req.params.id)); } catch (err) { next(err); }
 }
-export async function revealClientFieldHandler(req, res, next) {
-  try {
-    const { fieldName } = z.object({ fieldName: z.string() }).parse(req.body);
-    res.json(await clientService.revealClientField(req.params.id, fieldName, req.user.id, req.ip, req.headers['user-agent']));
-  } catch (err) { next(err); }
-}

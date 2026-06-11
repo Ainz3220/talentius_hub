@@ -36,7 +36,6 @@ export const clientsApi = {
   update: (id, d) => api.patch(`/clients/${id}`, d).then(r => r.data),
   delete: (id) => api.delete(`/clients/${id}`),
   expats: (id) => api.get(`/clients/${id}/expats`).then(r => r.data),
-  revealField: (id, fieldName) => api.post(`/clients/${id}/reveal-field`, { fieldName }).then(r => r.data),
 };
 
 // Dormitories
@@ -60,7 +59,6 @@ export const expatsApi = {
   updateStatus: (id, status) => api.patch(`/expats/${id}/status`, { status }).then(r => r.data),
   delete: (id) => api.delete(`/expats/${id}`),
   transfers: (id) => api.get(`/expats/${id}/transfers`).then(r => r.data),
-  revealField: (id, fieldName) => api.post(`/expats/${id}/reveal-field`, { fieldName }).then(r => r.data),
 };
 
 // Transfers

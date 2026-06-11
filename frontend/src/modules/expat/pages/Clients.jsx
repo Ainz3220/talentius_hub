@@ -62,6 +62,11 @@ export default function Clients() {
 
   const columns = [
     {
+      key: 'clientNo',
+      header: 'Client No',
+      render: (v) => <span className="font-mono text-xs font-semibold text-slate-500">{v || '—'}</span>,
+    },
+    {
       key: 'name',
       header: 'Client Name',
       render: (v) => <span className="font-medium text-slate-800">{v || '—'}</span>,
@@ -72,7 +77,6 @@ export default function Clients() {
       render: (v) => <StatusBadge status={v} />,
     },
     { key: 'contactName', header: 'Contact Person' },
-    { key: 'contactEmail', header: 'Email' },
     {
       key: 'id',
       header: '',

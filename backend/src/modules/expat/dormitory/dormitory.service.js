@@ -1,9 +1,18 @@
 import { prisma } from '../../../config/db.js';
-import { decrypt } from '../../../config/encryption.js';
 import { auditCreate, auditUpdate, auditDelete } from '../../../audit/audit.service.js';
 import { getSettings } from '../../settings/settings.service.js';
 
 const ACTIVE_EXPAT_STATUSES = ['PENDING', 'ACTIVE'];
+
+async function nextDormitoryNo(tx) {
+  const last = await tx.dormitory.findFirst({
+    where: { dormitoryNo: { not: null } },
+    orderBy: { dormitoryNo: 'desc' },
+    select: { dormitoryNo: true },
+  });
+  const n = last ? parseInt(last.dormitoryNo.replace('DOR', '')) + 1 : 1;
+  return `DOR${String(n).padStart(4, '0')}`;
+}
 
 export async function listDormitories(query) {
   const { status, state, page = 1, limit } = query;
@@ -23,11 +32,7 @@ export async function listDormitories(query) {
   const data = await Promise.all(
     dormitories.map(async (d) => {
       const occupantCount = await prisma.expat.count({
-        where: {
-          dormitoryId: d.id,
-          deletedAt: null,
-          status: { in: ACTIVE_EXPAT_STATUSES },
-        },
+        where: { dormitoryId: d.id, deletedAt: null, status: { in: ACTIVE_EXPAT_STATUSES } },
       });
       return { ...d, occupantCount };
     })
@@ -46,7 +51,8 @@ export async function getDormitoryById(id) {
 }
 
 export async function createDormitory(data, createdBy, ipAddress, userAgent) {
-  const d = await prisma.dormitory.create({ data: { ...data, createdBy } });
+  const dormitoryNo = await nextDormitoryNo(prisma);
+  const d = await prisma.dormitory.create({ data: { ...data, dormitoryNo, createdBy } });
   await auditCreate({ tableName: 'dormitories', recordId: d.id, data, performedBy: createdBy, ipAddress, userAgent });
   return d;
 }
@@ -102,8 +108,9 @@ export async function getDormitoryOccupants(dormitoryId) {
 
   return expats.map((e) => ({
     id: e.id,
-    fullName: e.fullName ? decrypt(e.fullName) : null,
-    passportNo: e.passportNo ? decrypt(e.passportNo) : null,
+    expatNo: e.expatNo,
+    fullName: e.fullName,
+    passportNo: e.passportNo,
     nationality: e.nationality,
     status: e.status,
     permitExpiry: e.permitExpiry,

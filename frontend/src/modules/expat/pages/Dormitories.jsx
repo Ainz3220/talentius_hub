@@ -72,6 +72,11 @@ export default function Dormitories() {
 
   const columns = [
     {
+      key: 'dormitoryNo',
+      header: 'Dorm No',
+      render: (v) => <span className="font-mono text-xs font-semibold text-slate-500">{v || '—'}</span>,
+    },
+    {
       key: 'name',
       header: 'Dormitory Name',
       render: (v) => <span className="font-medium text-slate-800">{v || '—'}</span>,

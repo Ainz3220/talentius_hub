@@ -5,7 +5,6 @@ import {
   updateExpat,
   updateExpatStatus,
   deleteExpat,
-  revealExpatField,
 } from './expat.service.js';
 
 function ipOf(req) { return req.ip || req.connection?.remoteAddress; }
@@ -55,11 +54,3 @@ export async function handleDelete(req, res, next) {
   } catch (err) { next(err); }
 }
 
-export async function handleRevealField(req, res, next) {
-  try {
-    const { fieldName } = req.body;
-    if (!fieldName) return res.status(400).json({ error: 'fieldName is required' });
-    const result = await revealExpatField(req.params.id, fieldName, req.user.id, ipOf(req), uaOf(req));
-    res.json(result);
-  } catch (err) { next(err); }
-}

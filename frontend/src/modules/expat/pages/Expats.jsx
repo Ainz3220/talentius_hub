@@ -84,6 +84,11 @@ export default function Expats() {
 
   const columns = [
     {
+      key: 'expatNo',
+      header: 'Expat No',
+      render: (v) => <span className="font-mono text-xs font-semibold text-slate-500">{v || '—'}</span>,
+    },
+    {
       key: 'fullName',
       header: 'Name',
       render: (v) => <span className="font-medium text-slate-800">{v || '—'}</span>,
