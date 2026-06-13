@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { expats as expatsApi, documents as docsApi, transfers as transfersApi, clients as clientsApi, dormitories as dormsApi } from '../../../api/index.js';
+import { expats as expatsApi, documents as docsApi, transfers as transfersApi, clients as clientsApi, dormitories as dormsApi, settings as settingsApi } from '../../../api/index.js';
 import StatusBadge from '../../../components/shared/StatusBadge.jsx';
 import { formatDate, daysUntil, getInitials, getAvatarColor } from '../../../lib/utils.js';
 
@@ -17,20 +17,24 @@ function KpiCard({ label, value, sub, subColor, warn, onClick }) {
 export default function Dashboard() {
   const navigate = useNavigate();
 
+  const { data: appSettings } = useQuery({ queryKey: ['settings'], queryFn: () => settingsApi.get().then(r => r.data), staleTime: 60000 });
+  const alertDays = appSettings?.docAlertDays1 ?? 30;
+  const urgentDays = appSettings?.docAlertDays2 ?? 7;
+
   const { data: activeExpats } = useQuery({ queryKey: ['expats-active-count'], queryFn: () => expatsApi.list({ status: 'ACTIVE', pageSize: 1 }).then(r => r.data.total) });
   const { data: newJoiners } = useQuery({ queryKey: ['expats-new-this-month'], queryFn: () => {
     const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
     return expatsApi.list({ status: 'ACTIVE', createdAfter: start.toISOString(), pageSize: 1 }).then(r => r.data.total);
   } });
   const { data: unassignedExpats } = useQuery({ queryKey: ['expats-unassigned-count'], queryFn: () => expatsApi.list({ unassigned: true, pageSize: 1 }).then(r => r.data.total) });
-  const { data: expiringDocs } = useQuery({ queryKey: ['docs-expiring-30'], queryFn: () => docsApi.expiring(30).then(r => r.data) });
+  const { data: expiringDocs } = useQuery({ queryKey: ['docs-expiring', alertDays], queryFn: () => docsApi.expiring(alertDays).then(r => r.data), enabled: !!appSettings });
   const { data: pendingTransfers } = useQuery({ queryKey: ['transfers-pending'], queryFn: () => transfersApi.list({ status: 'PENDING', pageSize: 5 }).then(r => r.data) });
   const { data: activeClients } = useQuery({ queryKey: ['clients-active-count'], queryFn: () => clientsApi.list({ status: 'ACTIVE', pageSize: 1 }).then(r => r.data.total) });
   const { data: companyClients } = useQuery({ queryKey: ['clients-company-count'], queryFn: () => clientsApi.list({ status: 'ACTIVE', type: 'COMPANY', pageSize: 1 }).then(r => r.data.total) });
   const { data: individualClients } = useQuery({ queryKey: ['clients-individual-count'], queryFn: () => clientsApi.list({ status: 'ACTIVE', type: 'INDIVIDUAL', pageSize: 1 }).then(r => r.data.total) });
   const { data: dorms } = useQuery({ queryKey: ['dormitories-all'], queryFn: () => dormsApi.list().then(r => r.data) });
 
-  const urgentDocs = expiringDocs?.filter(d => daysUntil(d.expiryDate) <= 7) || [];
+  const urgentDocs = expiringDocs?.filter(d => daysUntil(d.expiryDate) <= urgentDays) || [];
 
   return (
     <div>
@@ -38,7 +42,7 @@ export default function Dashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 24 }} className="kpi-grid">
         <KpiCard label="ACTIVE EXPATS" value={activeExpats ?? 0} sub={newJoiners ? `+${newJoiners} this month` : 'current'} subColor="var(--green)" />
         <KpiCard label="UNASSIGNED EXPATS" value={unassignedExpats ?? 0} sub="no client assigned" subColor="var(--amber)" warn={(unassignedExpats ?? 0) > 0} onClick={() => navigate('/expats?unassigned=true')} />
-        <KpiCard label="DOCS EXPIRING (30D)" value={expiringDocs?.length ?? 0} sub={urgentDocs.length > 0 ? `${urgentDocs.length} in 7 days` : 'none urgent'} subColor="var(--red)" warn={urgentDocs.length > 0} />
+        <KpiCard label={`DOCS EXPIRING (${alertDays}D)`} value={expiringDocs?.length ?? 0} sub={urgentDocs.length > 0 ? `${urgentDocs.length} in ${urgentDays} days` : 'none urgent'} subColor="var(--red)" warn={urgentDocs.length > 0} />
         <KpiCard label="PENDING TRANSFERS" value={pendingTransfers?.total ?? 0} sub="awaiting approval" subColor="var(--amber)" warn={(pendingTransfers?.total || 0) > 0} />
         <KpiCard label="ACTIVE CLIENTS" value={activeClients ?? 0} sub={`${companyClients ?? 0} companies · ${individualClients ?? 0} individual`} subColor="var(--text3)" />
       </div>
@@ -57,7 +61,7 @@ export default function Dashboard() {
             )}
             {expiringDocs?.slice(0, 6).map(doc => {
               const days = daysUntil(doc.expiryDate);
-              const danger = days !== null && days <= 7;
+              const danger = days !== null && days <= urgentDays;
               return (
                 <div key={doc.id} className="alert-item">
                   <div className="alert-dot" style={{ background: danger ? 'var(--red)' : 'var(--amber)' }} />

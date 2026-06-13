@@ -31,6 +31,7 @@ export const settings = {
 // ── Expats ────────────────────────────────────────
 export const expats = {
   list: (params) => api.get('/expats', { params }),
+  filterSchema: () => api.get('/expats/filter-schema'),
   get: (id) => api.get(`/expats/${id}`),
   create: (data) => api.post('/expats', data),
   update: (id, data) => api.patch(`/expats/${id}`, data),

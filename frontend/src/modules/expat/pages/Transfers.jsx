@@ -21,6 +21,7 @@ export default function Transfers() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
+  const [rejectModal, setRejectModal] = useState({ open: false, id: null, reason: '' });
   const pageSize = 20;
 
   const { data, isLoading } = useQuery({
@@ -43,9 +44,13 @@ export default function Transfers() {
     }
   }
 
-  async function handleReject(id) {
-    const reason = window.prompt('Rejection reason (optional):');
-    if (reason === null) return;
+  function openRejectModal(id) {
+    setRejectModal({ open: true, id, reason: '' });
+  }
+
+  async function handleReject() {
+    const { id, reason } = rejectModal;
+    setRejectModal({ open: false, id: null, reason: '' });
     setActionLoading(id);
     try {
       await transfersApi.reject(id, { reason });
@@ -161,7 +166,7 @@ export default function Transfers() {
                         <button
                           className="btn btn-outline btn-sm"
                           disabled={actionLoading === t.id}
-                          onClick={() => handleReject(t.id)}
+                          onClick={() => openRejectModal(t.id)}
                           style={{ padding: '4px 8px', color: 'var(--red)', borderColor: 'var(--red)' }}>
                           <X size={12} />
                         </button>
@@ -181,6 +186,31 @@ export default function Transfers() {
           </div>
         )}
       </div>
+
+      {/* Reject modal */}
+      {rejectModal.open && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setRejectModal({ open: false, id: null, reason: '' })}>
+          <div className="modal" style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <h3 style={{ fontFamily: 'Instrument Serif, serif', fontSize: 18 }}>Reject Transfer</h3>
+              <button onClick={() => setRejectModal({ open: false, id: null, reason: '' })} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text3)' }}>×</button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="form-label">Rejection Reason <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(optional)</span></label>
+                <textarea className="form-input" rows={3} autoFocus
+                  placeholder="Explain why this transfer is being rejected…"
+                  value={rejectModal.reason}
+                  onChange={e => setRejectModal(m => ({ ...m, reason: e.target.value }))} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setRejectModal({ open: false, id: null, reason: '' })}>Cancel</button>
+              <button className="btn" style={{ background: 'var(--red)', color: '#fff', border: 'none' }} onClick={handleReject}>Reject Transfer</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCreate && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowCreate(false)}>

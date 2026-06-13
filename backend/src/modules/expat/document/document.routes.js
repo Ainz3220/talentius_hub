@@ -8,7 +8,7 @@ router.use(authenticate, isStaff);
 
 router.get('/', ctrl.list);
 router.get('/expiring', ctrl.getExpiring);
-router.post('/upload', ctrl.upload.single('file'), ctrl.uploadDoc);
+router.post('/upload', ctrl.upload, ctrl.uploadDoc);
 router.post('/bulk-download', ctrl.bulkDownload);
 router.get('/:id/download', ctrl.download);
 router.delete('/:id', ctrl.remove);

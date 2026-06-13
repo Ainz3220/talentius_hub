@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Download, Upload, Plus } from 'lucide-react';
-import { expats as expatsApi, documents as docsApi, checklists as checklistApi, clients as clientsApi, dormitories as dormsApi, transfers as transfersApi } from '../../../api/index.js';
+import { expats as expatsApi, documents as docsApi, checklists as checklistApi, clients as clientsApi, dormitories as dormsApi, transfers as transfersApi, settings as settingsApi } from '../../../api/index.js';
 import StatusBadge from '../../../components/shared/StatusBadge.jsx';
 import ChecklistCard from '../../../components/shared/ChecklistCard.jsx';
 import DocumentUploadDialog from '../../../components/shared/DocumentUploadDialog.jsx';
+import DocumentPreviewModal from '../../../components/shared/DocumentPreviewModal.jsx';
 import AssignChecklistDialog from '../../../components/shared/AssignChecklistDialog.jsx';
 import { formatDate, daysUntil, getExpiryClass, getInitials, getAvatarColor, formatFileSize } from '../../../lib/utils.js';
 import { useAuthStore } from '../../../store/authStore.js';
@@ -25,9 +26,11 @@ export default function ExpatDetail() {
   const [saving, setSaving] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState(null);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferForm, setTransferForm] = useState({ toDormitoryId: '', toClientId: '', reason: '', effectiveDate: '' });
   const [transferSaving, setTransferSaving] = useState(false);
+  const [confirmTransfer, setConfirmTransfer] = useState(false);
 
   const { data: expat, isLoading } = useQuery({
     queryKey: ['expat', id],
@@ -46,8 +49,10 @@ export default function ExpatDetail() {
     enabled: tab === 'Checklists',
   });
 
-  const { data: clientList } = useQuery({ queryKey: ['clients-list'], queryFn: () => clientsApi.list({ pageSize: 100 }).then(r => r.data.items), enabled: editing });
+  const { data: clientList } = useQuery({ queryKey: ['clients-list'], queryFn: () => clientsApi.list({ pageSize: 100 }).then(r => r.data.items), enabled: editing || showTransfer });
   const { data: dormList } = useQuery({ queryKey: ['dorms-list'], queryFn: () => dormsApi.list().then(r => r.data), enabled: editing || showTransfer });
+  const { data: appSettings } = useQuery({ queryKey: ['settings'], queryFn: () => settingsApi.get().then(r => r.data), staleTime: 60000 });
+  const requiresApproval = appSettings?.transferRequiresApproval ?? true;
 
   function startEdit() {
     setEditForm({
@@ -64,7 +69,12 @@ export default function ExpatDetail() {
   async function handleSave() {
     setSaving(true);
     try {
-      await expatsApi.update(id, editForm);
+      const payload = { ...editForm };
+      if (!isManager) {
+        delete payload.clientId;
+        delete payload.dormitoryId;
+      }
+      await expatsApi.update(id, payload);
       qc.invalidateQueries({ queryKey: ['expat', id] });
       setEditing(false);
     } finally {
@@ -82,11 +92,19 @@ export default function ExpatDetail() {
 
   async function handleTransfer(e) {
     e.preventDefault();
+    if (!requiresApproval) { setConfirmTransfer(true); return; }
+    await submitTransfer();
+  }
+
+  async function submitTransfer() {
+    setConfirmTransfer(false);
     setTransferSaving(true);
     try {
-      await transfersApi.create({ expatId: id, ...transferForm, fromDormitoryId: expat.dormitoryId || undefined, fromClientId: expat.clientId });
+      const tf = Object.fromEntries(Object.entries(transferForm).filter(([, v]) => v !== '' && v !== null));
+      await transfersApi.create({ expatId: id, ...tf, fromDormitoryId: expat.dormitoryId || undefined, fromClientId: expat.clientId || undefined });
       qc.invalidateQueries({ queryKey: ['expat', id] });
       setShowTransfer(false);
+      setTransferForm({ toDormitoryId: '', toClientId: '', reason: '', effectiveDate: '' });
     } finally {
       setTransferSaving(false);
     }
@@ -160,27 +178,35 @@ export default function ExpatDetail() {
             <div className="detail-section-title">Current Assignment</div>
             {editing ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div><label className="form-label">Client</label>
-                  <select className="form-input" value={editForm.clientId || ''} onChange={e => setEditForm(f => ({ ...f, clientId: e.target.value }))}>
-                    <option value="">— Unassigned —</option>
-                    {clientList?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div><label className="form-label">Dormitory</label>
-                  <select className="form-input" value={editForm.dormitoryId} onChange={e => setEditForm(f => ({ ...f, dormitoryId: e.target.value }))}>
-                    <option value="">— None —</option>
-                    {dormList?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                </div>
+                {isManager ? (
+                  <>
+                    <div><label className="form-label">Client</label>
+                      <select className="form-input" value={editForm.clientId || ''} onChange={e => setEditForm(f => ({ ...f, clientId: e.target.value }))}>
+                        <option value="">— Unassigned —</option>
+                        {clientList?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div><label className="form-label">Dormitory</label>
+                      <select className="form-input" value={editForm.dormitoryId} onChange={e => setEditForm(f => ({ ...f, dormitoryId: e.target.value }))}>
+                        <option value="">— None —</option>
+                        {dormList?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ padding: '10px 12px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', fontSize: 12, color: 'var(--text3)' }}>
+                    To change Client or Dormitory, use <strong>Request Transfer</strong>.
+                  </div>
+                )}
               </div>
             ) : (
               <>
                 <div className="detail-row"><span className="detail-label">Client</span><span className="detail-val">{expat.client?.name || '—'}</span></div>
                 <div className="detail-row"><span className="detail-label">Dormitory</span><span className="detail-val">{expat.dormitory?.name || '—'}</span></div>
                 <div className="detail-row"><span className="detail-label">Permit Expiry</span>
-                  <span className={`detail-val ${getExpiryClass(permitDays)}`}>
+                  <span className={`detail-val ${getExpiryClass(permitDays, appSettings?.docAlertDays1 ?? 30, appSettings?.docAlertDays2 ?? 7)}`}>
                     {expat.permitExpiry ? formatDate(expat.permitExpiry) : '—'}
-                    {permitDays !== null && permitDays <= 30 && ` (${permitDays <= 0 ? 'expired' : `${permitDays}d`})`}
+                    {permitDays !== null && permitDays <= (appSettings?.docAlertDays1 ?? 30) && ` (${permitDays <= 0 ? 'expired' : `${permitDays}d`})`}
                   </span>
                 </div>
                 <div className="detail-row"><span className="detail-label">Expat No.</span><span className="detail-val" style={{ fontFamily: 'monospace', fontSize: 12 }}>{expat.expatNo}</span></div>
@@ -220,17 +246,21 @@ export default function ExpatDetail() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>{doc.originalName}</div>
-                    <div style={{ fontSize: 11, color: days !== null && days <= 30 ? (days <= 7 ? 'var(--red)' : 'var(--accent2)') : 'var(--text3)', marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: days !== null && days <= (appSettings?.docAlertDays1 ?? 30) ? (days <= (appSettings?.docAlertDays2 ?? 7) ? 'var(--red)' : 'var(--accent2)') : 'var(--text3)', marginTop: 2 }}>
                       {doc.documentType} · {formatFileSize(doc.fileSizeBytes)}
                       {doc.expiryDate && ` · Expires ${formatDate(doc.expiryDate)}`}
                     </div>
                   </div>
-                  <button className="btn btn-outline btn-sm" onClick={() => downloadDoc(doc)}>Download</button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-outline btn-sm" onClick={() => setPreviewDoc(doc)}>View</button>
+                    <button className="btn btn-outline btn-sm" onClick={() => downloadDoc(doc)}>Download</button>
+                  </div>
                 </div>
               );
             })}
           </div>
           {showUpload && <DocumentUploadDialog entityType="EXPAT" entityId={id} onClose={() => setShowUpload(false)} />}
+          {previewDoc && <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
         </div>
       )}
 
@@ -284,8 +314,21 @@ export default function ExpatDetail() {
             </div>
             <form onSubmit={handleTransfer}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ background: 'var(--amber-light)', border: '1px solid rgba(138,98,0,0.2)', borderRadius: 'var(--r-sm)', padding: '10px 12px', fontSize: 12, color: 'var(--amber)' }}>
-                  ⚠ Transfer requires Manager approval before taking effect
+                {requiresApproval ? (
+                  <div style={{ background: 'var(--amber-light)', border: '1px solid rgba(138,98,0,0.2)', borderRadius: 'var(--r-sm)', padding: '10px 12px', fontSize: 12, color: 'var(--amber)' }}>
+                    ⚠ Transfer requires Manager approval before taking effect
+                  </div>
+                ) : (
+                  <div style={{ background: 'rgba(0,160,90,0.07)', border: '1px solid rgba(0,160,90,0.2)', borderRadius: 'var(--r-sm)', padding: '10px 12px', fontSize: 12, color: 'var(--green)' }}>
+                    ✓ Transfers are set to auto-approve — this will take effect immediately
+                  </div>
+                )}
+                <div>
+                  <label className="form-label">New Client</label>
+                  <select className="form-input" value={transferForm.toClientId} onChange={e => setTransferForm(f => ({ ...f, toClientId: e.target.value }))}>
+                    <option value="">— No change —</option>
+                    {clientList?.filter(c => c.id !== expat.clientId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="form-label">New Dormitory</label>
@@ -306,9 +349,32 @@ export default function ExpatDetail() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setShowTransfer(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={transferSaving}>{transferSaving ? 'Submitting…' : 'Submit for Approval'}</button>
+                <button type="submit" className="btn btn-primary" disabled={transferSaving}>
+                  {transferSaving ? 'Applying…' : requiresApproval ? 'Submit for Approval' : 'Apply Transfer'}
+                </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {confirmTransfer && (
+        <div className="modal-overlay" onClick={() => setConfirmTransfer(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="modal-header">
+              <h3 style={{ fontFamily: 'Instrument Serif, serif', fontSize: 17 }}>Confirm Transfer</h3>
+              <button onClick={() => setConfirmTransfer(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text3)' }}>×</button>
+            </div>
+            <div className="modal-body" style={{ fontSize: 13, color: 'var(--text2)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p>This transfer will be <strong>applied immediately</strong> without requiring approval.</p>
+              <p>Are you sure you want to proceed?</p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setConfirmTransfer(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={submitTransfer} disabled={transferSaving}>
+                {transferSaving ? 'Applying…' : 'Yes, Apply Now'}
+              </button>
+            </div>
           </div>
         </div>
       )}

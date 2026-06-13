@@ -14,7 +14,7 @@ export default function ChecklistCard({ checklist, entityType, entityId }) {
   const done = items.filter(i => i.status === 'DONE' || i.status === 'WAIVED').length;
   const total = items.length;
   const pct = total ? Math.round((done / total) * 100) : 0;
-  const overdue = items.filter(i => i.status === 'PENDING' && i.overdueSince).length;
+  const overdueItemCount = items.filter(i => i.status === 'PENDING' && i.overdueSince).length;
 
   function handleToggle(item) {
     if (item.status === 'DONE') {
@@ -44,10 +44,16 @@ export default function ChecklistCard({ checklist, entityType, entityId }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontWeight: 600, fontSize: 13 }}>{checklist.name}</span>
             <StatusBadge status={checklist.status} />
-            {overdue > 0 && (
+            {checklist.isOverdue && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--accent2)' }}>
                 <AlertCircle size={12} />
-                {overdue} overdue
+                overdue
+              </span>
+            )}
+            {!checklist.isOverdue && overdueItemCount > 0 && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--accent2)' }}>
+                <AlertCircle size={12} />
+                {overdueItemCount} items overdue
               </span>
             )}
           </div>

@@ -21,6 +21,20 @@ export default function Clients() {
     queryFn: () => clientsApi.list({ type: typeFilter, search, pageSize: 100 }).then(r => r.data),
   });
 
+  const { data: companiesCount } = useQuery({
+    queryKey: ['clients-count-company'],
+    queryFn: () => clientsApi.list({ type: 'COMPANY', pageSize: 1 }).then(r => r.data.total),
+  });
+  const { data: individualsCount } = useQuery({
+    queryKey: ['clients-count-individual'],
+    queryFn: () => clientsApi.list({ type: 'INDIVIDUAL', pageSize: 1 }).then(r => r.data.total),
+  });
+  const counts = {
+    '': (companiesCount ?? 0) + (individualsCount ?? 0),
+    'COMPANY': companiesCount ?? 0,
+    'INDIVIDUAL': individualsCount ?? 0,
+  };
+
   async function handleCreate(e) {
     e.preventDefault();
     setSaving(true);
@@ -44,7 +58,10 @@ export default function Clients() {
           <h3 style={{ fontSize: 14, fontWeight: 600 }}>Clients</h3>
           <div className="tab-group" style={{ marginLeft: 16 }}>
             {[{k:'',l:'All'},{k:'COMPANY',l:'Companies'},{k:'INDIVIDUAL',l:'Individual'}].map(t => (
-              <button key={t.k} className={`tab-item${typeFilter===t.k?' active':''}`} style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setTypeFilter(t.k)}>{t.l}</button>
+              <button key={t.k} className={`tab-item${typeFilter===t.k?' active':''}`} style={{ padding: '5px 12px', fontSize: 12 }} onClick={() => setTypeFilter(t.k)}>
+                {t.l}
+                <span style={{ marginLeft: 5, fontSize: 11, opacity: 0.7 }}>{counts[t.k]}</span>
+              </button>
             ))}
           </div>
           <div className="search-box" style={{ minWidth: 200 }}>

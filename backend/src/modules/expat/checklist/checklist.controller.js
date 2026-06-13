@@ -92,6 +92,24 @@ export async function deleteTemplateItem(req, res, next) {
   } catch (err) { next(err); }
 }
 
+function applyOverdue(checklists, overdueDays) {
+  if (overdueDays == null) return checklists.map(cl => ({ ...cl, isOverdue: false }));
+  const now = Date.now();
+  const threshold = overdueDays * 86400000;
+  return checklists.map(cl => {
+    const overdue = cl.status === 'IN_PROGRESS' && (now - new Date(cl.createdAt).getTime()) > threshold;
+    const overdueSinceDate = overdue ? new Date(new Date(cl.createdAt).getTime() + threshold) : null;
+    return {
+      ...cl,
+      isOverdue: overdue,
+      items: (cl.items || []).map(item => ({
+        ...item,
+        overdueSince: item.status === 'PENDING' && overdue ? overdueSinceDate : (item.overdueSince ?? null),
+      })),
+    };
+  });
+}
+
 // ── Instances ──────────────────────────────────────
 export async function listChecklists(req, res, next) {
   try {
@@ -100,27 +118,35 @@ export async function listChecklists(req, res, next) {
     if (entityType) where.entityType = entityType;
     if (entityId) where.entityId = entityId;
     if (status) where.status = status;
-    const checklists = await prisma.checklist.findMany({
-      where,
-      include: {
-        items: { orderBy: { order: 'asc' } },
-        template: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json(await enrichItemsWithUsers(checklists));
+    const [checklists, s] = await Promise.all([
+      prisma.checklist.findMany({
+        where,
+        include: {
+          items: { orderBy: { order: 'asc' } },
+          template: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.systemSettings.findUnique({ where: { id: 'system' } }),
+    ]);
+    const enriched = await enrichItemsWithUsers(checklists);
+    res.json(applyOverdue(enriched, s?.checklistOverdueDays));
   } catch (err) { next(err); }
 }
 
 export async function getChecklist(req, res, next) {
   try {
-    const checklist = await prisma.checklist.findUnique({
-      where: { id: req.params.id },
-      include: { items: { orderBy: { order: 'asc' } }, template: true },
-    });
+    const [checklist, s] = await Promise.all([
+      prisma.checklist.findUnique({
+        where: { id: req.params.id },
+        include: { items: { orderBy: { order: 'asc' } }, template: true },
+      }),
+      prisma.systemSettings.findUnique({ where: { id: 'system' } }),
+    ]);
     if (!checklist) return res.status(404).json({ error: 'Checklist not found' });
     const [enriched] = await enrichItemsWithUsers([checklist]);
-    res.json(enriched);
+    const [result] = applyOverdue([enriched], s?.checklistOverdueDays);
+    res.json(result);
   } catch (err) { next(err); }
 }
 

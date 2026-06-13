@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Save, RefreshCw, Plus } from 'lucide-react';
+import { RefreshCw, Plus, Pencil } from 'lucide-react';
 import { settings as settingsApi, users as usersApi } from '../../../api/index.js';
 import { useAuthStore } from '../../../store/authStore.js';
 import StatusBadge from '../../../components/shared/StatusBadge.jsx';
@@ -44,11 +44,15 @@ export default function Settings() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('General');
   const [local, setLocal] = useState({});
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('idle'); // idle | saving | saved
+  const isFirstLoad = useRef(true);
+  const saveTimer = useRef(null);
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'STAFF' });
   const [inviting, setInviting] = useState(false);
+  const [editUser, setEditUser] = useState(null);
+  const [editUserForm, setEditUserForm] = useState({});
+  const [editUserSaving, setEditUserSaving] = useState(false);
 
   const { data: cfg } = useQuery({
     queryKey: ['settings'],
@@ -62,23 +66,33 @@ export default function Settings() {
   });
 
   useEffect(() => {
-    if (cfg) setLocal(cfg);
+    if (cfg) {
+      setLocal(cfg);
+      isFirstLoad.current = true;
+    }
   }, [cfg]);
+
+  useEffect(() => {
+    if (isFirstLoad.current) { isFirstLoad.current = false; return; }
+    if (!isSuperAdmin) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      setSaveStatus('saving');
+      try {
+        const { id, createdAt, updatedAt, ...rest } = local;
+        const payload = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== null));
+        await settingsApi.update(payload);
+        qc.invalidateQueries({ queryKey: ['settings'] });
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch {
+        setSaveStatus('idle');
+      }
+    }, 700);
+  }, [local]);
 
   function set(key, val) {
     setLocal(prev => ({ ...prev, [key]: val }));
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await settingsApi.update(local);
-      qc.invalidateQueries({ queryKey: ['settings'] });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } finally {
-      setSaving(false);
-    }
   }
 
   async function handleInvite(e) {
@@ -91,6 +105,18 @@ export default function Settings() {
       setInviteForm({ name: '', email: '', role: 'STAFF' });
     } finally {
       setInviting(false);
+    }
+  }
+
+  async function handleEditUserSave(e) {
+    e.preventDefault();
+    setEditUserSaving(true);
+    try {
+      await usersApi.update(editUser.id, editUserForm);
+      qc.invalidateQueries({ queryKey: ['users'] });
+      setEditUser(null);
+    } finally {
+      setEditUserSaving(false);
     }
   }
 
@@ -111,14 +137,11 @@ export default function Settings() {
         <div className="tab-group">
           {TABS.map(t => <button key={t} className={`tab-item${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{t}</button>)}
         </div>
-        {tab !== 'Users' && isSuperAdmin && (
-          <div style={{ marginLeft: 'auto' }}>
-            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-              {saving
-                ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
-                : saved ? '✓ Saved'
-                : <><Save size={14} /> Save Changes</>}
-            </button>
+        {tab !== 'Users' && isSuperAdmin && saveStatus !== 'idle' && (
+          <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {saveStatus === 'saving'
+              ? <><RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
+              : <span style={{ color: 'var(--green)' }}>✓ Saved</span>}
           </div>
         )}
       </div>
@@ -168,10 +191,10 @@ export default function Settings() {
           </div>
           <div className="table-card">
             <table>
-              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>{isSuperAdmin && <th></th>}</tr></thead>
               <tbody>
                 {!users?.length && (
-                  <tr><td colSpan={4}><div className="empty-state" style={{ padding: 32 }}>No users found.</div></td></tr>
+                  <tr><td colSpan={isSuperAdmin ? 5 : 4}><div className="empty-state" style={{ padding: 32 }}>No users found.</div></td></tr>
                 )}
                 {users?.map(u => (
                   <tr key={u.id}>
@@ -185,6 +208,13 @@ export default function Settings() {
                       }}>{u.role}</span>
                     </td>
                     <td><StatusBadge status={u.isActive ? 'ACTIVE' : 'INACTIVE'} /></td>
+                    {isSuperAdmin && (
+                      <td>
+                        <button className="btn btn-outline btn-sm" onClick={() => { setEditUser(u); setEditUserForm({ name: u.name || '', role: u.role, isActive: u.isActive }); }} style={{ padding: '3px 8px' }}>
+                          <Pencil size={12} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -220,6 +250,45 @@ export default function Settings() {
                   <div className="modal-footer">
                     <button type="button" className="btn btn-outline" onClick={() => setShowInvite(false)}>Cancel</button>
                     <button type="submit" className="btn btn-primary" disabled={inviting}>{inviting ? 'Creating…' : 'Create User'}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {editUser && (
+            <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setEditUser(null)}>
+              <div className="modal">
+                <div className="modal-header">
+                  <h3 style={{ fontFamily: 'Instrument Serif, serif', fontSize: 18 }}>Edit User</h3>
+                  <button onClick={() => setEditUser(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text3)' }}>×</button>
+                </div>
+                <form onSubmit={handleEditUserSave}>
+                  <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text3)', padding: '6px 10px', background: 'var(--surface2)', borderRadius: 'var(--r-sm)' }}>{editUser.email}</div>
+                    <div>
+                      <label className="form-label">Full Name</label>
+                      <input type="text" className="form-input" value={editUserForm.name} onChange={e => setEditUserForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Ahmad Karim" />
+                    </div>
+                    <div>
+                      <label className="form-label">Role</label>
+                      <select className="form-input" value={editUserForm.role} onChange={e => setEditUserForm(f => ({ ...f, role: e.target.value }))}>
+                        <option value="STAFF">Staff</option>
+                        <option value="MANAGER">Manager</option>
+                        <option value="SUPER_ADMIN">Super Admin</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Status</label>
+                      <select className="form-input" value={editUserForm.isActive ? 'active' : 'inactive'} onChange={e => setEditUserForm(f => ({ ...f, isActive: e.target.value === 'active' }))}>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-outline" onClick={() => setEditUser(null)}>Cancel</button>
+                    <button type="submit" className="btn btn-primary" disabled={editUserSaving}>{editUserSaving ? 'Saving…' : 'Save Changes'}</button>
                   </div>
                 </form>
               </div>

@@ -40,20 +40,20 @@ export function formatFileSize(bytes) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-export function getExpiryClass(daysLeft) {
+export function getExpiryClass(daysLeft, alertDays = 30, urgentDays = 7) {
   if (daysLeft === null) return '';
   if (daysLeft <= 0) return 'text-[var(--red)] font-semibold';
-  if (daysLeft <= 7) return 'text-[var(--red)] font-semibold';
-  if (daysLeft <= 30) return 'text-[var(--accent2)] font-medium';
+  if (daysLeft <= urgentDays) return 'text-[var(--red)] font-semibold';
+  if (daysLeft <= alertDays) return 'text-[var(--accent2)] font-medium';
   return 'text-[var(--text2)]';
 }
 
-export function getExpiryLabel(daysLeft) {
+export function getExpiryLabel(daysLeft, alertDays = 30, urgentDays = 7) {
   if (daysLeft === null) return '';
   if (daysLeft < 0) return `Expired ${Math.abs(daysLeft)}d ago`;
   if (daysLeft === 0) return 'Expires today';
-  if (daysLeft <= 7) return `⚠ ${daysLeft}d left`;
-  if (daysLeft <= 30) return `${daysLeft}d left`;
+  if (daysLeft <= urgentDays) return `⚠ ${daysLeft}d left`;
+  if (daysLeft <= alertDays) return `${daysLeft}d left`;
   return '';
 }
 

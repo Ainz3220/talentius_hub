@@ -34,9 +34,44 @@ function formatExpat(e) {
   };
 }
 
+export async function filterSchema(req, res, next) {
+  try {
+    const [nationalities, clients, dormitories] = await Promise.all([
+      prisma.expat.findMany({ select: { nationality: true }, distinct: ['nationality'], orderBy: { nationality: 'asc' } }),
+      prisma.client.findMany({ select: { id: true, name: true }, where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
+      prisma.dormitory.findMany({ select: { id: true, name: true }, where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
+    ]);
+    res.json([
+      {
+        category: 'General',
+        fields: [
+          { key: 'nationality', label: 'Nationality', type: 'select',
+            options: nationalities.map(n => ({ value: n.nationality, label: n.nationality })) },
+        ],
+      },
+      {
+        category: 'Assignments',
+        fields: [
+          { key: 'clientId',    label: 'Client',     type: 'select',
+            options: clients.map(c => ({ value: c.id, label: c.name })) },
+          { key: 'dormitoryId', label: 'Dormitory',  type: 'select',
+            options: dormitories.map(d => ({ value: d.id, label: d.name })) },
+          { key: 'unassigned',  label: 'No Client',  type: 'boolean' },
+        ],
+      },
+      {
+        category: 'Dates',
+        fields: [
+          { key: 'permitExpiry', label: 'Permit Expiry', type: 'date' },
+        ],
+      },
+    ]);
+  } catch (err) { next(err); }
+}
+
 export async function list(req, res, next) {
   try {
-    const { page = 1, pageSize = 25, status, search, clientId, dormitoryId, unassigned, createdAfter } = req.query;
+    const { page = 1, pageSize = 25, status, search, clientId, dormitoryId, unassigned, createdAfter, nationality, permitExpiryFrom, permitExpiryTo } = req.query;
     const where = {};
     if (status) where.status = status;
     if (unassigned === 'true') where.clientId = null;
@@ -44,6 +79,12 @@ export async function list(req, res, next) {
     if (dormitoryId) where.dormitoryId = dormitoryId;
     if (search) where.fullName = { contains: search, mode: 'insensitive' };
     if (createdAfter) where.createdAt = { gte: new Date(createdAfter) };
+    if (nationality) where.nationality = { equals: nationality, mode: 'insensitive' };
+    if (permitExpiryFrom || permitExpiryTo) {
+      where.permitExpiry = {};
+      if (permitExpiryFrom) where.permitExpiry.gte = new Date(permitExpiryFrom);
+      if (permitExpiryTo)   where.permitExpiry.lte = new Date(permitExpiryTo);
+    }
 
     const [total, items] = await Promise.all([
       prisma.expat.count({ where }),

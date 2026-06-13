@@ -16,6 +16,13 @@ const PAGE_TITLES = {
   '/settings': 'Settings',
 };
 
+const DETAIL_TITLES = {
+  '/expats': 'Expat Detail',
+  '/clients': 'Client Detail',
+  '/dormitories': 'Dormitory Detail',
+  '/transfers': 'Transfer Detail',
+};
+
 export default function Topbar() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -25,7 +32,9 @@ export default function Topbar() {
   const searchTimer = useRef(null);
   const qc = useQueryClient();
 
-  const title = PAGE_TITLES[location.pathname] || location.pathname.split('/').pop() || 'Dashboard';
+  const segments = location.pathname.split('/').filter(Boolean);
+  const base = '/' + (segments[0] || '');
+  const title = PAGE_TITLES[location.pathname] || (segments.length > 1 ? DETAIL_TITLES[base] : null) || PAGE_TITLES[base] || 'Dashboard';
 
   const { data: notifData } = useQuery({
     queryKey: ['notifications'],

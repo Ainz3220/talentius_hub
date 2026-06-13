@@ -11,16 +11,22 @@ import { logCreate, logDelete } from '../../../audit/audit.service.js';
 const UPLOAD_DIR = path.resolve(env.UPLOAD_DIR || 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-export const upload = multer({
-  storage: multer.diskStorage({
-    destination: UPLOAD_DIR,
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname);
-      cb(null, uuid() + ext);
-    },
-  }),
-  limits: { fileSize: env.MAX_FILE_SIZE },
-});
+export async function upload(req, res, next) {
+  try {
+    const s = await prisma.systemSettings.findUnique({ where: { id: 'system' } });
+    const fileSize = s?.maxFileSize ?? env.MAX_FILE_SIZE;
+    multer({
+      storage: multer.diskStorage({
+        destination: UPLOAD_DIR,
+        filename: (req, file, cb) => {
+          const ext = path.extname(file.originalname);
+          cb(null, uuid() + ext);
+        },
+      }),
+      limits: { fileSize },
+    }).single('file')(req, res, next);
+  } catch (err) { next(err); }
+}
 
 export async function list(req, res, next) {
   try {
@@ -35,7 +41,9 @@ export async function list(req, res, next) {
 
 export async function getExpiring(req, res, next) {
   try {
-    const days = parseInt(req.query.days || '30', 10);
+    const s = await prisma.systemSettings.findUnique({ where: { id: 'system' } });
+    const defaultDays = s?.docAlertDays1 ?? 30;
+    const days = req.query.days !== undefined ? parseInt(req.query.days, 10) : defaultDays;
     const cutoff = new Date(Date.now() + days * 86400000);
     const docs = await prisma.document.findMany({
       where: { expiryDate: { lte: cutoff, gte: new Date() } },

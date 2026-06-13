@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore.js';
-import { auth as authApi } from '../../api/index.js';
+import { auth as authApi, transfers as transfersApi } from '../../api/index.js';
 import { getInitials } from '../../lib/utils.js';
 import {
   LayoutDashboard, Users, Briefcase, Home, ArrowLeftRight,
@@ -25,6 +26,12 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isManager = user?.role === 'MANAGER' || isSuperAdmin;
+
+  const { data: pendingCount } = useQuery({
+    queryKey: ['transfers-pending-count'],
+    queryFn: () => transfersApi.list({ status: 'PENDING', pageSize: 1 }).then(r => r.data.total),
+    refetchInterval: 5000,
+  });
 
   async function handleLogout() {
     await authApi.logout().catch(() => {});
@@ -65,6 +72,16 @@ export default function Sidebar() {
         >
           <item.icon className="nav-icon" size={16} />
           {item.label}
+          {item.to === '/transfers' && pendingCount > 0 && (
+            <span style={{
+              marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9,
+              background: 'var(--accent2)', color: '#fff',
+              fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 5px',
+            }}>
+              {pendingCount > 99 ? '99+' : pendingCount}
+            </span>
+          )}
         </NavLink>
       ))}
 
@@ -117,7 +134,7 @@ export default function Sidebar() {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
-              {user?.email?.split('@')[0] || 'User'}
+              {user?.name || user?.email?.split('@')[0] || 'User'}
             </div>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{user?.role}</div>
           </div>

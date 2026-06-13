@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Upload, Plus } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, Download } from 'lucide-react';
 import { clients as clientsApi, documents as docsApi, checklists as checklistApi } from '../../../api/index.js';
 import StatusBadge from '../../../components/shared/StatusBadge.jsx';
 import ChecklistCard from '../../../components/shared/ChecklistCard.jsx';
 import DocumentUploadDialog from '../../../components/shared/DocumentUploadDialog.jsx';
+import DocumentPreviewModal from '../../../components/shared/DocumentPreviewModal.jsx';
 import AssignChecklistDialog from '../../../components/shared/AssignChecklistDialog.jsx';
 import { getInitials, getAvatarColor, formatDate, formatFileSize, daysUntil } from '../../../lib/utils.js';
 
@@ -16,6 +17,7 @@ export default function ClientDetail() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('Overview');
   const [showUpload, setShowUpload] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState(null);
   const [showChecklist, setShowChecklist] = useState(false);
 
   const { data: client, isLoading } = useQuery({
@@ -34,6 +36,14 @@ export default function ClientDetail() {
     queryFn: () => checklistApi.list({ entityType: 'CLIENT', entityId: id }).then(r => r.data),
     enabled: tab === 'Checklists',
   });
+
+  async function downloadDoc(doc) {
+    const { data } = await docsApi.download(doc.id);
+    const url = URL.createObjectURL(new Blob([data]));
+    const a = document.createElement('a');
+    a.href = url; a.download = doc.originalName; a.click();
+    URL.revokeObjectURL(url);
+  }
 
   if (isLoading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>Loading…</div>;
   if (!client) return <div style={{ padding: 40 }}>Client not found.</div>;
@@ -112,22 +122,40 @@ export default function ClientDetail() {
 
       {tab === 'Documents' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+            <button className="btn btn-outline" onClick={() => {
+              if (docs?.length) {
+                docsApi.bulkDownload(docs.map(d => d.id)).then(({ data }) => {
+                  const url = URL.createObjectURL(new Blob([data], { type: 'application/zip' }));
+                  const a = document.createElement('a'); a.href = url; a.download = 'documents.zip'; a.click();
+                  URL.revokeObjectURL(url);
+                });
+              }
+            }}>
+              <Download size={14} /> Download All (ZIP)
+            </button>
             <button className="btn btn-primary" onClick={() => setShowUpload(true)}><Upload size={14} /> Upload</button>
           </div>
           <div className="table-card">
             {!docs?.length && <div style={{ padding: 32, textAlign: 'center', color: 'var(--text3)' }}>No documents uploaded.</div>}
             {docs?.map((doc, i) => (
               <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < docs.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div style={{ width: 36, height: 36, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>📄</div>
+                <div style={{ width: 36, height: 36, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                  {doc.mimeType?.includes('pdf') ? '📄' : '🖼️'}
+                </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{doc.originalName}</div>
                   <div style={{ fontSize: 11, color: 'var(--text3)' }}>{doc.documentType} · {formatFileSize(doc.fileSizeBytes)}{doc.expiryDate ? ` · Expires ${formatDate(doc.expiryDate)}` : ''}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-outline btn-sm" onClick={() => setPreviewDoc(doc)}>View</button>
+                  <button className="btn btn-outline btn-sm" onClick={() => downloadDoc(doc)}>Download</button>
                 </div>
               </div>
             ))}
           </div>
           {showUpload && <DocumentUploadDialog entityType="CLIENT" entityId={id} onClose={() => setShowUpload(false)} />}
+          {previewDoc && <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
         </div>
       )}
 

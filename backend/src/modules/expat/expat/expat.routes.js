@@ -7,6 +7,7 @@ const router = Router();
 router.use(authenticate, isStaff);
 
 router.get('/', ctrl.list);
+router.get('/filter-schema', ctrl.filterSchema);
 router.post('/', ctrl.create);
 router.get('/:id', ctrl.get);
 router.patch('/:id', ctrl.update);

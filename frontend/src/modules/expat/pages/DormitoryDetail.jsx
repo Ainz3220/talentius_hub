@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Upload, Plus, UserMinus } from 'lucide-react';
+import { ArrowLeft, Upload, Plus, UserMinus, Download } from 'lucide-react';
 import { dormitories as dormsApi, documents as docsApi, checklists as checklistApi } from '../../../api/index.js';
 import StatusBadge from '../../../components/shared/StatusBadge.jsx';
 import ChecklistCard from '../../../components/shared/ChecklistCard.jsx';
 import DocumentUploadDialog from '../../../components/shared/DocumentUploadDialog.jsx';
+import DocumentPreviewModal from '../../../components/shared/DocumentPreviewModal.jsx';
 import AssignChecklistDialog from '../../../components/shared/AssignChecklistDialog.jsx';
 import { getInitials, getAvatarColor, formatDate, formatFileSize } from '../../../lib/utils.js';
 
@@ -17,6 +18,7 @@ export default function DormitoryDetail() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('Overview');
   const [showUpload, setShowUpload] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState(null);
   const [showChecklist, setShowChecklist] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -52,10 +54,18 @@ export default function DormitoryDetail() {
     }
   }
 
+  async function downloadDoc(doc) {
+    const { data } = await docsApi.download(doc.id);
+    const url = URL.createObjectURL(new Blob([data]));
+    const a = document.createElement('a');
+    a.href = url; a.download = doc.originalName; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (isLoading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>Loading…</div>;
   if (!dorm) return <div style={{ padding: 40 }}>Dormitory not found.</div>;
 
-  const occ = dorm._count?.expats || 0;
+  const occ = dorm.expats?.length ?? dorm._count?.expats ?? 0;
   const pct = dorm.capacity ? Math.round((occ / dorm.capacity) * 100) : 0;
   const nearFull = pct >= 90;
 
@@ -167,7 +177,18 @@ export default function DormitoryDetail() {
 
       {tab === 'Documents' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+            <button className="btn btn-outline" onClick={() => {
+              if (docs?.length) {
+                docsApi.bulkDownload(docs.map(d => d.id)).then(({ data }) => {
+                  const url = URL.createObjectURL(new Blob([data], { type: 'application/zip' }));
+                  const a = document.createElement('a'); a.href = url; a.download = 'documents.zip'; a.click();
+                  URL.revokeObjectURL(url);
+                });
+              }
+            }}>
+              <Download size={14} /> Download All (ZIP)
+            </button>
             <button className="btn btn-primary" onClick={() => setShowUpload(true)}><Upload size={14} /> Upload</button>
           </div>
           <div className="table-card">
@@ -179,10 +200,15 @@ export default function DormitoryDetail() {
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{doc.originalName}</div>
                   <div style={{ fontSize: 11, color: 'var(--text3)' }}>{doc.documentType} · {formatFileSize(doc.fileSizeBytes)}{doc.expiryDate ? ` · Expires ${formatDate(doc.expiryDate)}` : ''}</div>
                 </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-outline btn-sm" onClick={() => setPreviewDoc(doc)}>View</button>
+                  <button className="btn btn-outline btn-sm" onClick={() => downloadDoc(doc)}>Download</button>
+                </div>
               </div>
             ))}
           </div>
           {showUpload && <DocumentUploadDialog entityType="DORMITORY" entityId={id} onClose={() => setShowUpload(false)} />}
+          {previewDoc && <DocumentPreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
         </div>
       )}
 
