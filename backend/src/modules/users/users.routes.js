@@ -1,22 +1,16 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.js';
-import { requireRole } from '../../middleware/rbac.js';
-import {
-  listUsersHandler, getUserHandler, createUserHandler,
-  updateUserHandler, manualVerifyHandler, resendVerificationHandler, deleteUserHandler,
-} from './users.controller.js';
+import { isSuperAdmin } from '../../middleware/rbac.js';
+import * as ctrl from './users.controller.js';
 
 const router = Router();
+router.use(authenticate, isSuperAdmin);
 
-router.use(authenticate);
-router.use(requireRole('SUPER_ADMIN', 'MANAGER'));
-
-router.get('/', listUsersHandler);
-router.get('/:id', getUserHandler);
-router.post('/', createUserHandler);
-router.patch('/:id', updateUserHandler);
-router.patch('/:id/verify', requireRole('SUPER_ADMIN'), manualVerifyHandler);
-router.post('/:id/resend-verification', resendVerificationHandler);
-router.delete('/:id', requireRole('SUPER_ADMIN'), deleteUserHandler);
+router.get('/', ctrl.list);
+router.post('/', ctrl.create);
+router.get('/:id', ctrl.get);
+router.patch('/:id', ctrl.update);
+router.delete('/:id', ctrl.remove);
+router.post('/:id/verify', ctrl.verify);
 
 export default router;

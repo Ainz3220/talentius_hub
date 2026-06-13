@@ -1,116 +1,126 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X } from 'lucide-react';
-import { checklistsApi } from '../../api/index.js';
-import { StatusBadge } from './StatusBadge.jsx';
-import { useToast } from '../ui/toast.jsx';
-import { formatDate } from '../../lib/utils.js';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { checklists as checklistApi } from '../../api/index.js';
+import StatusBadge from './StatusBadge.jsx';
+import { Check, Minus, AlertCircle } from 'lucide-react';
 
-export function ChecklistCard({ checklist, queryKey }) {
-  const { toast } = useToast();
+export default function ChecklistCard({ checklist, entityType, entityId }) {
   const qc = useQueryClient();
-  const done = checklist.items?.filter(i => i.status === 'DONE' || i.status === 'WAIVED').length ?? 0;
-  const total = checklist.items?.length ?? 0;
-  const pct = total ? Math.round((done / total) * 100) : 0;
+  const [expanding, setExpanding] = useState(false);
+  const [updating, setUpdating] = useState(null);
+  const [confirmItem, setConfirmItem] = useState(null);
 
-  const updateItem = useMutation({
-    mutationFn: ({ itemId, data }) => checklistsApi.updateItem(checklist.id, itemId, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey }); },
-    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error, type: 'error' }),
-  });
+  const items = checklist.items || [];
+  const done = items.filter(i => i.status === 'DONE' || i.status === 'WAIVED').length;
+  const total = items.length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const overdue = items.filter(i => i.status === 'PENDING' && i.overdueSince).length;
+
+  function handleToggle(item) {
+    if (item.status === 'DONE') {
+      setConfirmItem(item);
+    } else {
+      doUpdate(item, 'DONE');
+    }
+  }
+
+  async function doUpdate(item, nextStatus) {
+    setUpdating(item.id);
+    try {
+      await checklistApi.updateItem(checklist.id, item.id, { status: nextStatus });
+      qc.invalidateQueries({ queryKey: ['checklists', entityType, entityId] });
+    } finally {
+      setUpdating(null);
+    }
+  }
 
   return (
-    <div className="table-card" style={{ marginBottom: 12 }}>
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{checklist.name}</span>
-          <StatusBadge status={checklist.status} />
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '14px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
+        onClick={() => setExpanding(e => !e)}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>{checklist.name}</span>
+            <StatusBadge status={checklist.status} />
+            {overdue > 0 && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--accent2)' }}>
+                <AlertCircle size={12} />
+                {overdue} overdue
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="progress-bar-track" style={{ flex: 1, height: 5 }}>
+              <div className="progress-bar-fill" style={{ width: `${pct}%`, background: pct === 100 ? 'var(--green)' : 'var(--accent)' }} />
+            </div>
+            <span style={{ fontSize: 12, color: 'var(--text3)', whiteSpace: 'nowrap' }}>{done}/{total}</span>
+          </div>
         </div>
-        <div style={{ background: 'var(--surface3)', borderRadius: 4, height: 5, marginBottom: 6 }}>
-          <div style={{ width: `${pct}%`, height: 5, borderRadius: 4, background: 'var(--accent)', transition: 'width 0.4s' }} />
-        </div>
-        <span style={{ fontSize: 11, color: 'var(--text3)' }}>{done}/{total} items complete</span>
+        <div style={{ fontSize: 11, color: 'var(--text3)', transform: expanding ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</div>
       </div>
 
-      <div style={{ padding: '8px 0' }}>
-        {(!checklist.items || checklist.items.length === 0) && (
-          <div style={{ padding: '20px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>
-            No items in this checklist.
-          </div>
-        )}
-        {checklist.items?.map(item => {
-          const isOverdue = item.overdueSince && item.status === 'PENDING';
-          const isDone = item.status === 'DONE' || item.status === 'WAIVED';
-          return (
-            <div
-              key={item.id}
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 10,
-                padding: '8px 16px',
-                borderBottom: '1px solid var(--border)',
-                background: isOverdue ? 'var(--amber-light)' : 'transparent',
-                fontSize: 13,
-              }}
-            >
-              <div
-                style={{
-                  width: 17,
-                  height: 17,
-                  borderRadius: 4,
-                  flexShrink: 0,
-                  border: `1.5px solid ${isDone ? 'var(--accent)' : 'var(--border2)'}`,
-                  background: isDone ? 'var(--accent)' : 'transparent',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginTop: 1,
-                }}
+      {/* Items */}
+      {expanding && (
+        <div style={{ borderTop: '1px solid var(--border)' }}>
+          {items.map(item => (
+            <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 18px', borderBottom: '1px solid var(--border)' }}>
+              <button
+                className={`cb${item.status === 'DONE' ? ' done' : item.status === 'WAIVED' ? ' waived' : ''}`}
+                onClick={() => handleToggle(item)}
+                disabled={updating === item.id || checklist.status === 'ARCHIVED'}
+                style={{ marginTop: 1, cursor: checklist.status === 'ARCHIVED' ? 'not-allowed' : 'pointer' }}
               >
-                {isDone && <Check size={9} color="#fff" strokeWidth={3} />}
-              </div>
-
+                {item.status === 'DONE' && <Check size={10} stroke="#fff" strokeWidth={3} />}
+                {item.status === 'WAIVED' && <Minus size={10} stroke="var(--amber)" strokeWidth={3} />}
+              </button>
               <div style={{ flex: 1 }}>
-                <span style={{ color: isDone ? 'var(--text3)' : 'var(--text)', textDecoration: isDone ? 'line-through' : 'none' }}>
+                <div style={{
+                  fontSize: 13,
+                  color: item.status === 'DONE' ? 'var(--text3)' : item.status === 'WAIVED' ? 'var(--amber)' : 'var(--text)',
+                  textDecoration: item.status === 'DONE' ? 'line-through' : 'none',
+                }}>
                   {item.itemText}
-                </span>
-                {item.notes && (
-                  <div style={{ fontSize: 11, fontStyle: 'italic', color: 'var(--text3)', marginTop: 2 }}>{item.notes}</div>
-                )}
-                {isOverdue && (
-                  <div style={{ fontSize: 11, color: 'var(--amber)', marginTop: 2 }}>
-                    Overdue since {formatDate(item.overdueSince)}
+                </div>
+                {item.status === 'DONE' && item.completedByName && (
+                  <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
+                    ✓ {item.completedByName} · {new Date(item.completedAt).toLocaleString()}
                   </div>
                 )}
-                {item.completedAt && (
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
-                    Completed {formatDate(item.completedAt)}
+                {item.status === 'WAIVED' && item.waivedByName && (
+                  <div style={{ fontSize: 10, color: 'var(--amber)', marginTop: 3 }}>
+                    Waived by {item.waivedByName}{item.waivedReason ? ` — ${item.waivedReason}` : ''}
                   </div>
                 )}
               </div>
-
-              {item.status === 'PENDING' && (
-                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                  <button
-                    onClick={() => updateItem.mutate({ itemId: item.id, data: { status: 'DONE' } })}
-                    title="Mark done"
-                    style={{ width: 26, height: 26, borderRadius: 4, background: 'var(--green-light)', color: 'var(--green)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <Check size={12} />
-                  </button>
-                  <button
-                    onClick={() => updateItem.mutate({ itemId: item.id, data: { status: 'WAIVED', waivedReason: 'Waived by user' } })}
-                    title="Waive"
-                    style={{ width: 26, height: 26, borderRadius: 4, background: 'var(--surface2)', color: 'var(--text3)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
+              {item.overdueSince && item.status === 'PENDING' && (
+                <span style={{ fontSize: 10, color: 'var(--accent2)', whiteSpace: 'nowrap' }}>Overdue</span>
               )}
             </div>
-          );
-        })}
-      </div>
+          ))}
+          {items.length === 0 && (
+            <div style={{ padding: '16px 18px', color: 'var(--text3)', fontSize: 13 }}>No items in this checklist.</div>
+          )}
+        </div>
+      )}
+      {confirmItem && (
+        <div className="modal-overlay" onClick={() => setConfirmItem(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div className="modal-header">
+              <h3 style={{ fontFamily: 'Instrument Serif, serif', fontSize: 17 }}>Uncheck item?</h3>
+              <button onClick={() => setConfirmItem(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text3)' }}>×</button>
+            </div>
+            <div className="modal-body" style={{ fontSize: 13, color: 'var(--text2)' }}>
+              <strong>"{confirmItem.itemText}"</strong> is already marked as done. Are you sure you want to uncheck it?
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setConfirmItem(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => { doUpdate(confirmItem, 'PENDING'); setConfirmItem(null); }}>Yes, uncheck</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

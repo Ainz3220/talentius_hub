@@ -1,24 +1,16 @@
 import { Router } from 'express';
 import { authenticate } from '../../../middleware/auth.js';
-import { upload, checkFileSize } from '../../../middleware/upload.js';
-import {
-  handleList,
-  handleGetExpiring,
-  handleUpload,
-  handleDownload,
-  handleDelete,
-  handleBulkDownload,
-} from './document.controller.js';
+import { isStaff } from '../../../middleware/rbac.js';
+import * as ctrl from './document.controller.js';
 
 const router = Router();
+router.use(authenticate, isStaff);
 
-router.use(authenticate);
-
-router.get('/', handleList);
-router.get('/expiring', handleGetExpiring);
-router.post('/', upload.single('file'), checkFileSize, handleUpload);
-router.post('/bulk-download', handleBulkDownload);
-router.get('/:id/download', handleDownload);
-router.delete('/:id', handleDelete);
+router.get('/', ctrl.list);
+router.get('/expiring', ctrl.getExpiring);
+router.post('/upload', ctrl.upload.single('file'), ctrl.uploadDoc);
+router.post('/bulk-download', ctrl.bulkDownload);
+router.get('/:id/download', ctrl.download);
+router.delete('/:id', ctrl.remove);
 
 export default router;

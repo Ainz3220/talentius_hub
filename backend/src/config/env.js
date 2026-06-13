@@ -1,25 +1,21 @@
-import { z } from 'zod';
+import 'dotenv/config';
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.coerce.number().default(3001),
-  FRONTEND_URL: z.string().url(),
-  DATABASE_URL: z.string(),
-  JWT_SECRET: z.string().min(32),
-  JWT_EXPIRES_IN: z.string().default('15m'),
-  REFRESH_TOKEN_SECRET: z.string().min(32),
-  REFRESH_TOKEN_EXPIRES_IN: z.string().default('7d'),
-  ENCRYPTION_KEY: z.string().length(64),
-  SENDGRID_API_KEY: z.string(),
-  SENDGRID_FROM_EMAIL: z.string().email(),
-  UPLOAD_DIR: z.string().default('/data/uploads'),
-});
-
-const parsed = envSchema.safeParse(process.env);
-
-if (!parsed.success) {
-  console.error('Invalid environment variables:', parsed.error.flatten().fieldErrors);
-  process.exit(1);
-}
-
-export const env = parsed.data;
+export const env = {
+  DATABASE_URL: process.env.DATABASE_URL,
+  JWT_SECRET: process.env.JWT_SECRET || 'dev-jwt-secret',
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret',
+  JWT_ACCESS_EXPIRES: process.env.JWT_ACCESS_EXPIRES || '15m',
+  JWT_REFRESH_EXPIRES: process.env.JWT_REFRESH_EXPIRES || '7d',
+  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || '0'.repeat(64),
+  HMAC_SECRET: process.env.HMAC_SECRET || 'dev-hmac-secret',
+  SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
+  EMAIL_FROM: process.env.EMAIL_FROM || 'noreply@talenthub.com',
+  EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME || 'Talentius Hub',
+  PORT: parseInt(process.env.PORT || '3000', 10),
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+  UPLOAD_DIR: process.env.UPLOAD_DIR || 'uploads',
+  MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE || '10485760', 10),
+  OTP_TTL_MINUTES: parseInt(process.env.OTP_TTL_MINUTES || '10', 10),
+  isDev: (process.env.NODE_ENV || 'development') === 'development',
+};

@@ -1,22 +1,39 @@
-const map = {
-  ACTIVE:      { cls: 'badge-active',      label: 'Active' },
-  INACTIVE:    { cls: 'badge-inactive',    label: 'Inactive' },
-  PENDING:     { cls: 'badge-pending',     label: 'Pending' },
-  TRANSFERRED: { cls: 'badge-transferred', label: 'Transferred' },
-  EXPIRED:     { cls: 'badge-expired',     label: 'Expired' },
-  REPATRIATED: { cls: 'badge-repatriated', label: 'Repatriated' },
-  APPROVED:    { cls: 'badge-approved',    label: 'Approved' },
-  REJECTED:    { cls: 'badge-rejected',    label: 'Rejected' },
-  IN_PROGRESS: { cls: 'badge-in_progress', label: 'In Progress' },
-  COMPLETED:   { cls: 'badge-completed',   label: 'Completed' },
-  ARCHIVED:    { cls: 'badge-archived',    label: 'Archived' },
-  COMPANY:     { cls: 'badge-company',     label: 'Company' },
-  INDIVIDUAL:  { cls: 'badge-individual',  label: 'Individual' },
-  GLOBAL:      { cls: 'badge-global',      label: 'Global' },
-  CUSTOM:      { cls: 'badge-custom',      label: 'Custom' },
-};
+export default function StatusBadge({ status }) {
+  const map = {
+    ACTIVE: 'badge badge-active',
+    PENDING: 'badge badge-pending',
+    TRANSFERRED: 'badge badge-transferred',
+    EXPIRED: 'badge badge-expired',
+    REPATRIATED: 'badge badge-repatriated',
+    INACTIVE: 'badge badge-inactive',
+    COMPANY: 'badge badge-company',
+    INDIVIDUAL: 'badge badge-individual',
+    IN_PROGRESS: 'badge badge-in-progress',
+    COMPLETED: 'badge badge-completed',
+    ARCHIVED: 'badge badge-inactive',
+    APPROVED: 'badge badge-approved',
+    REJECTED: 'badge badge-rejected',
+  };
 
-export function StatusBadge({ status }) {
-  const cfg = map[status] || { cls: 'badge-archived', label: status };
-  return <span className={`badge-dot ${cfg.cls}`}>{cfg.label}</span>;
+  const labels = {
+    ACTIVE: 'Active',
+    PENDING: 'Pending',
+    TRANSFERRED: 'Transferred',
+    EXPIRED: 'Expired',
+    REPATRIATED: 'Repatriated',
+    INACTIVE: 'Inactive',
+    COMPANY: 'Company',
+    INDIVIDUAL: 'Individual',
+    IN_PROGRESS: 'In Progress',
+    COMPLETED: 'Completed',
+    ARCHIVED: 'Archived',
+    APPROVED: 'Approved',
+    REJECTED: 'Rejected',
+  };
+
+  return (
+    <span className={map[status] || 'badge badge-inactive'}>
+      {labels[status] || status}
+    </span>
+  );
 }

@@ -1,11 +1,13 @@
-export function PageHeader({ title, description, actions }) {
+export default function PageHeader({ title, subtitle, actions }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
       <div>
-        <h2 style={{ fontFamily: "'Instrument Serif', serif", fontSize: 22, color: 'var(--text)', lineHeight: 1.2 }}>{title}</h2>
-        {description && <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3 }}>{description}</p>}
+        <h1 style={{ fontFamily: 'Instrument Serif, serif', fontSize: 24, color: 'var(--text)', lineHeight: 1.2 }}>
+          {title}
+        </h1>
+        {subtitle && <p style={{ fontSize: 13, color: 'var(--text2)', marginTop: 4 }}>{subtitle}</p>}
       </div>
-      {actions && <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{actions}</div>}
+      {actions && <div style={{ display: 'flex', gap: 8 }}>{actions}</div>}
     </div>
   );
 }

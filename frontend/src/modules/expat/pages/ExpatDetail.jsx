@@ -1,433 +1,317 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, Upload, Plus, CheckCircle, XCircle, ArrowRight } from 'lucide-react';
-import { expatsApi, checklistsApi, documentsApi, transfersApi, clientsApi, dormitoriesApi } from '../../../api/index.js';
-import { DocumentUploadDialog } from '../../../components/shared/DocumentUploadDialog.jsx';
-import { AssignChecklistDialog } from '../../../components/shared/AssignChecklistDialog.jsx';
-import { ChecklistCard } from '../../../components/shared/ChecklistCard.jsx';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs.jsx';
-import { Button } from '../../../components/ui/button.jsx';
-import { Badge } from '../../../components/ui/badge.jsx';
-import { Card, CardContent } from '../../../components/ui/card.jsx';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../components/ui/dialog.jsx';
-import { Input } from '../../../components/ui/input.jsx';
-import { Label } from '../../../components/ui/label.jsx';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../../components/ui/select.jsx';
-import { Skeleton } from '../../../components/ui/skeleton.jsx';
-import { StatusBadge } from '../../../components/shared/StatusBadge.jsx';
-import { useToast } from '../../../components/ui/toast.jsx';
+import { useParams, useNavigate } from 'react-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Download, Upload, Plus } from 'lucide-react';
+import { expats as expatsApi, documents as docsApi, checklists as checklistApi, clients as clientsApi, dormitories as dormsApi, transfers as transfersApi } from '../../../api/index.js';
+import StatusBadge from '../../../components/shared/StatusBadge.jsx';
+import ChecklistCard from '../../../components/shared/ChecklistCard.jsx';
+import DocumentUploadDialog from '../../../components/shared/DocumentUploadDialog.jsx';
+import AssignChecklistDialog from '../../../components/shared/AssignChecklistDialog.jsx';
+import { formatDate, daysUntil, getExpiryClass, getInitials, getAvatarColor, formatFileSize } from '../../../lib/utils.js';
 import { useAuthStore } from '../../../store/authStore.js';
-import { formatDate, daysUntil } from '../../../lib/utils.js';
 
-
+const TABS = ['Overview', 'Documents', 'Checklists', 'Transfers'];
 
 export default function ExpatDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const user = useAuthStore(s => s.user);
-  const canApprove = user?.role === 'SUPER_ADMIN' || user?.role === 'MANAGER';
+  const qc = useQueryClient();
+  const { user } = useAuthStore();
+  const isManager = user?.role === 'MANAGER' || user?.role === 'SUPER_ADMIN';
+
+  const [tab, setTab] = useState('Overview');
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-  const [showAssignChecklist, setShowAssignChecklist] = useState(false);
-  const [showCreateTransfer, setShowCreateTransfer] = useState(false);
-  const [showReject, setShowReject] = useState(false);
-  const [rejectTargetId, setRejectTargetId] = useState(null);
-  const [rejectReason, setRejectReason] = useState('');
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
   const [transferForm, setTransferForm] = useState({ toDormitoryId: '', toClientId: '', reason: '', effectiveDate: '' });
+  const [transferSaving, setTransferSaving] = useState(false);
 
   const { data: expat, isLoading } = useQuery({
     queryKey: ['expat', id],
-    queryFn: () => expatsApi.get(id),
+    queryFn: () => expatsApi.get(id).then(r => r.data),
+  });
+
+  const { data: docs } = useQuery({
+    queryKey: ['documents', 'EXPAT', id],
+    queryFn: () => docsApi.list({ entityType: 'EXPAT', entityId: id }).then(r => r.data),
+    enabled: tab === 'Documents',
   });
 
   const { data: checklists } = useQuery({
-    queryKey: ['checklists', id],
-    queryFn: () => checklistsApi.list({ entityType: 'EXPAT', entityId: id }),
+    queryKey: ['checklists', 'EXPAT', id],
+    queryFn: () => checklistApi.list({ entityType: 'EXPAT', entityId: id }).then(r => r.data),
+    enabled: tab === 'Checklists',
   });
 
-  const { data: documents } = useQuery({
-    queryKey: ['documents', id],
-    queryFn: () => documentsApi.list({ entityType: 'EXPAT', entityId: id }),
-  });
+  const { data: clientList } = useQuery({ queryKey: ['clients-list'], queryFn: () => clientsApi.list({ pageSize: 100 }).then(r => r.data.items), enabled: editing });
+  const { data: dormList } = useQuery({ queryKey: ['dorms-list'], queryFn: () => dormsApi.list().then(r => r.data), enabled: editing || showTransfer });
 
-  const { data: transfers } = useQuery({
-    queryKey: ['expat-transfers', id],
-    queryFn: () => expatsApi.transfers(id),
-  });
-
-  const { data: dormitories } = useQuery({
-    queryKey: ['dorms-all'],
-    queryFn: () => dormitoriesApi.list({}),
-    enabled: showCreateTransfer,
-  });
-
-  const { data: clients } = useQuery({
-    queryKey: ['clients-all'],
-    queryFn: () => clientsApi.list({}),
-    enabled: showCreateTransfer,
-  });
-
-  const qc = useQueryClient();
-
-  const approveMutation = useMutation({
-    mutationFn: transfersApi.approve,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['expat-transfers', id] });
-      qc.invalidateQueries({ queryKey: ['transfers'] });
-      toast({ title: 'Transfer approved', type: 'success' });
-    },
-    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error, type: 'error' }),
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: ({ tid, reason }) => transfersApi.reject(tid, reason),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['expat-transfers', id] });
-      qc.invalidateQueries({ queryKey: ['transfers'] });
-      setShowReject(false);
-      setRejectReason('');
-      setRejectTargetId(null);
-      toast({ title: 'Transfer rejected', type: 'success' });
-    },
-    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error, type: 'error' }),
-  });
-
-  const createTransferMutation = useMutation({
-    mutationFn: (form) => transfersApi.create({ ...form, expatId: id }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['expat-transfers', id] });
-      qc.invalidateQueries({ queryKey: ['transfers'] });
-      setShowCreateTransfer(false);
-      setTransferForm({ toDormitoryId: '', toClientId: '', reason: '', effectiveDate: '' });
-      toast({ title: 'Transfer request submitted', type: 'success' });
-    },
-    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error, type: 'error' }),
-  });
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+  function startEdit() {
+    setEditForm({
+      fullName: expat.fullName,
+      nationality: expat.nationality,
+      status: expat.status,
+      clientId: expat.clientId,
+      dormitoryId: expat.dormitoryId || '',
+      permitExpiry: expat.permitExpiry ? expat.permitExpiry.slice(0, 10) : '',
+    });
+    setEditing(true);
   }
 
-  if (!expat) return <p className="text-slate-500">Expat not found.</p>;
-
-  const checklistList = checklists?.data || (Array.isArray(checklists) ? checklists : []);
-  const documentList = documents?.data || (Array.isArray(documents) ? documents : []);
-  const transferList = transfers?.data || (Array.isArray(transfers) ? transfers : []);
-
-  async function downloadDoc(doc) {
+  async function handleSave() {
+    setSaving(true);
     try {
-      const blob = await documentsApi.download(doc.id);
-      const url = URL.createObjectURL(blob);
-      const a = Object.assign(document.createElement('a'), { href: url, download: doc.documentType });
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast({ title: 'Download failed', type: 'error' });
+      await expatsApi.update(id, editForm);
+      qc.invalidateQueries({ queryKey: ['expat', id] });
+      setEditing(false);
+    } finally {
+      setSaving(false);
     }
   }
 
+  async function downloadDoc(doc) {
+    const { data } = await docsApi.download(doc.id);
+    const url = URL.createObjectURL(new Blob([data]));
+    const a = document.createElement('a');
+    a.href = url; a.download = doc.originalName; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleTransfer(e) {
+    e.preventDefault();
+    setTransferSaving(true);
+    try {
+      await transfersApi.create({ expatId: id, ...transferForm, fromDormitoryId: expat.dormitoryId || undefined, fromClientId: expat.clientId });
+      qc.invalidateQueries({ queryKey: ['expat', id] });
+      setShowTransfer(false);
+    } finally {
+      setTransferSaving(false);
+    }
+  }
+
+  if (isLoading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>Loading…</div>;
+  if (!expat) return <div style={{ padding: 40 }}>Expat not found.</div>;
+
+  const permitDays = daysUntil(expat.permitExpiry);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}>
-          <ArrowLeft size={18} />
+    <div>
+      {/* Back + Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+        <button className="btn btn-outline btn-sm" onClick={() => navigate('/expats')} style={{ padding: '5px 10px' }}>
+          <ArrowLeft size={14} /> Back
         </button>
-        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--accent-light)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 600 }}>
-          {(expat.fullName || 'E').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
+        <div className={`avatar ${getAvatarColor(expat.fullName)}`} style={{ width: 44, height: 44, fontSize: 16 }}>
+          {getInitials(expat.fullName)}
         </div>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 20, color: 'var(--text)' }}>{expat.fullName || 'Expat'}</span>
-            {expat.expatNo && (
-              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: 'var(--text3)', background: 'var(--surface2)', padding: '2px 8px', borderRadius: 4 }}>
-                {expat.expatNo}
-              </span>
-            )}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3, display: 'flex', gap: 8 }}>
-            <span>{expat.nationality}</span>
-            <span>·</span>
-            <span>Permit expires {formatDate(expat.permitExpiry)}</span>
+          <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22 }}>{expat.fullName}</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 3 }}>
+            <StatusBadge status={expat.status} />
+            <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text3)' }}>{expat.expatNo}</span>
           </div>
         </div>
-        <StatusBadge status={expat.status} />
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          {!editing && <button className="btn btn-outline" onClick={startEdit}>Edit Profile</button>}
+          {editing && <>
+            <button className="btn btn-outline" onClick={() => setEditing(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          </>}
+          <button className="btn btn-primary" onClick={() => setShowTransfer(true)}>Request Transfer</button>
+        </div>
       </div>
 
-      <Tabs defaultValue="info">
-        <TabsList>
-          <TabsTrigger value="info">Info</TabsTrigger>
-          <TabsTrigger value="checklists">Checklists ({checklistList.length})</TabsTrigger>
-          <TabsTrigger value="documents">Documents ({documentList.length})</TabsTrigger>
-          <TabsTrigger value="transfers">Transfers ({transferList.length})</TabsTrigger>
-        </TabsList>
+      {/* Tabs */}
+      <div className="tab-group" style={{ marginBottom: 20 }}>
+        {TABS.map(t => <button key={t} className={`tab-item${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{t}</button>)}
+      </div>
 
-        <TabsContent value="info">
-          <div className="table-card">
-            <div style={{ padding: 0 }}>
-              {[
-                ['Passport No', expat.passportNo],
-                ['Phone', expat.phone],
-                ['Date of Birth', expat.dateOfBirth],
-                ['Nationality', expat.nationality],
-                ['Permit Expiry', formatDate(expat.permitExpiry)],
-                ['Client', expat.client?.name],
-                ['Dormitory', expat.dormitory?.name],
-              ].map(([label, val]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 16px', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ fontSize: 12, color: 'var(--text3)' }}>{label}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500, textAlign: 'right' }}>{val || '—'}</span>
+      {/* ── Overview ── */}
+      {tab === 'Overview' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {/* Personal Info */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px 24px' }}>
+            <div className="detail-section-title">Personal Information</div>
+            {editing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div><label className="form-label">Full Name</label><input className="form-input" value={editForm.fullName} onChange={e => setEditForm(f => ({ ...f, fullName: e.target.value }))} /></div>
+                <div><label className="form-label">Nationality</label><input className="form-input" value={editForm.nationality} onChange={e => setEditForm(f => ({ ...f, nationality: e.target.value }))} /></div>
+                <div><label className="form-label">Permit Expiry</label><input type="date" className="form-input" value={editForm.permitExpiry} onChange={e => setEditForm(f => ({ ...f, permitExpiry: e.target.value }))} /></div>
+                <div><label className="form-label">Status</label>
+                  <select className="form-input" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
+                    {['PENDING','ACTIVE','TRANSFERRED','EXPIRED','REPATRIATED'].map(s => <option key={s}>{s}</option>)}
+                  </select>
                 </div>
-              ))}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 16px' }}>
-                <span style={{ fontSize: 12, color: 'var(--text3)' }}>Status</span>
-                <StatusBadge status={expat.status} />
               </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="checklists">
-          <div className="space-y-4">
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => setShowAssignChecklist(true)}>
-                <Upload size={14} /> Assign Checklist
-              </Button>
-            </div>
-            {checklistList.map(cl => (
-              <ChecklistCard key={cl.id} checklist={cl} queryKey={['checklists', id]} />
-            ))}
-            {checklistList.length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center">No checklists found.</p>
+            ) : (
+              <>
+                <div className="detail-row"><span className="detail-label">Passport No.</span><span className="detail-val" style={{ fontFamily: 'monospace' }}>{expat.passportNo}</span></div>
+                <div className="detail-row"><span className="detail-label">Nationality</span><span className="detail-val">{expat.nationality}</span></div>
+                <div className="detail-row"><span className="detail-label">Date of Birth</span><span className="detail-val">{expat.dateOfBirth || '—'}</span></div>
+                <div className="detail-row"><span className="detail-label">Phone</span><span className="detail-val">{expat.phone || '—'}</span></div>
+              </>
             )}
           </div>
-          <AssignChecklistDialog
-            open={showAssignChecklist}
-            onOpenChange={setShowAssignChecklist}
-            entityType="EXPAT"
-            entityId={id}
-            queryKey={['checklists', id]}
-          />
-        </TabsContent>
+          {/* Assignment */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px 24px' }}>
+            <div className="detail-section-title">Current Assignment</div>
+            {editing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div><label className="form-label">Client</label>
+                  <select className="form-input" value={editForm.clientId || ''} onChange={e => setEditForm(f => ({ ...f, clientId: e.target.value }))}>
+                    <option value="">— Unassigned —</option>
+                    {clientList?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div><label className="form-label">Dormitory</label>
+                  <select className="form-input" value={editForm.dormitoryId} onChange={e => setEditForm(f => ({ ...f, dormitoryId: e.target.value }))}>
+                    <option value="">— None —</option>
+                    {dormList?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="detail-row"><span className="detail-label">Client</span><span className="detail-val">{expat.client?.name || '—'}</span></div>
+                <div className="detail-row"><span className="detail-label">Dormitory</span><span className="detail-val">{expat.dormitory?.name || '—'}</span></div>
+                <div className="detail-row"><span className="detail-label">Permit Expiry</span>
+                  <span className={`detail-val ${getExpiryClass(permitDays)}`}>
+                    {expat.permitExpiry ? formatDate(expat.permitExpiry) : '—'}
+                    {permitDays !== null && permitDays <= 30 && ` (${permitDays <= 0 ? 'expired' : `${permitDays}d`})`}
+                  </span>
+                </div>
+                <div className="detail-row"><span className="detail-label">Expat No.</span><span className="detail-val" style={{ fontFamily: 'monospace', fontSize: 12 }}>{expat.expatNo}</span></div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
-        <TabsContent value="documents">
-          <div className="space-y-3">
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => setShowUpload(true)}>
-                <Upload size={14} /> Upload Document
-              </Button>
-            </div>
-            {documentList.map(doc => {
+      {/* ── Documents ── */}
+      {tab === 'Documents' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+            <button className="btn btn-outline" onClick={() => {
+              if (docs?.length) {
+                docsApi.bulkDownload(docs.map(d => d.id)).then(({ data }) => {
+                  const url = URL.createObjectURL(new Blob([data], { type: 'application/zip' }));
+                  const a = document.createElement('a'); a.href = url; a.download = 'documents.zip'; a.click();
+                  URL.revokeObjectURL(url);
+                });
+              }
+            }}>
+              <Download size={14} /> Download All (ZIP)
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowUpload(true)}>
+              <Upload size={14} /> Upload Document
+            </button>
+          </div>
+          <div className="table-card">
+            {!docs?.length && <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text3)' }}>No documents uploaded yet.</div>}
+            {docs?.map((doc, i) => {
               const days = daysUntil(doc.expiryDate);
               return (
-                <Card key={doc.id}>
-                  <CardContent className="pt-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">{doc.documentType}</p>
-                      <p className="text-xs text-slate-500 flex items-center gap-1">
-                        Expires {formatDate(doc.expiryDate)}
-                        {days !== null && days <= 30 && (
-                          <Badge variant={days <= 0 ? 'destructive' : days <= 7 ? 'destructive' : 'warning'}>
-                            {days <= 0 ? 'Expired' : `${days}d`}
-                          </Badge>
-                        )}
-                      </p>
+                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < docs.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <div style={{ width: 36, height: 36, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
+                    {doc.mimeType?.includes('pdf') ? '📄' : '🖼️'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{doc.originalName}</div>
+                    <div style={{ fontSize: 11, color: days !== null && days <= 30 ? (days <= 7 ? 'var(--red)' : 'var(--accent2)') : 'var(--text3)', marginTop: 2 }}>
+                      {doc.documentType} · {formatFileSize(doc.fileSizeBytes)}
+                      {doc.expiryDate && ` · Expires ${formatDate(doc.expiryDate)}`}
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => downloadDoc(doc)}>
-                      <Download size={14} />
-                    </Button>
-                  </CardContent>
-                </Card>
+                  </div>
+                  <button className="btn btn-outline btn-sm" onClick={() => downloadDoc(doc)}>Download</button>
+                </div>
               );
             })}
-            {documentList.length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center">No documents uploaded yet.</p>
-            )}
           </div>
-          <DocumentUploadDialog
-            open={showUpload}
-            onOpenChange={setShowUpload}
-            entityType="EXPAT"
-            entityId={id}
-            queryKey={['documents', id]}
-          />
-        </TabsContent>
+          {showUpload && <DocumentUploadDialog entityType="EXPAT" entityId={id} onClose={() => setShowUpload(false)} />}
+        </div>
+      )}
 
-        <TabsContent value="transfers">
-          <div className="space-y-3">
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => setShowCreateTransfer(true)}>
-                <Plus size={14} /> Request Transfer
-              </Button>
-            </div>
-
-            {transferList.map(t => (
-              <Card key={t.id}>
-                <CardContent className="pt-4 space-y-3">
-                  {/* Header row */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">{t.reason}</p>
-                      <p className="text-xs text-slate-400">Requested {formatDate(t.createdAt)}</p>
-                    </div>
-                    <StatusBadge status={t.status} />
-                  </div>
-
-                  {/* From → To rows */}
-                  <div className="grid grid-cols-1 gap-1.5 text-xs text-slate-600">
-                    {(t.fromDormitory || t.toDormitory) && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-500 w-20 shrink-0">Dormitory</span>
-                        <span>{t.fromDormitory?.name || '—'}</span>
-                        <ArrowRight size={12} className="text-slate-400 shrink-0" />
-                        <span className={t.toDormitory ? 'font-medium text-slate-800' : ''}>{t.toDormitory?.name || '—'}</span>
-                      </div>
-                    )}
-                    {(t.fromClient || t.toClient) && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-500 w-20 shrink-0">Client</span>
-                        <span>{t.fromClient?.name || '—'}</span>
-                        <ArrowRight size={12} className="text-slate-400 shrink-0" />
-                        <span className={t.toClient ? 'font-medium text-slate-800' : ''}>{t.toClient?.name || '—'}</span>
-                      </div>
-                    )}
-                    {t.effectiveDate && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-500 w-20 shrink-0">Effective</span>
-                        <span>{formatDate(t.effectiveDate)}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Approval / rejection info */}
-                  {t.status === 'APPROVED' && t.approvedAt && (
-                    <p className="text-xs text-green-600">Approved {formatDate(t.approvedAt)}</p>
-                  )}
-                  {t.status === 'REJECTED' && (
-                    <div className="text-xs text-red-600 space-y-0.5">
-                      <p>Rejected: {t.rejectedReason || '—'}</p>
-                    </div>
-                  )}
-
-                  {/* Approve / Reject actions */}
-                  {t.status === 'PENDING' && canApprove && (
-                    <div className="flex gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                        onClick={() => approveMutation.mutate(t.id)}
-                        disabled={approveMutation.isPending}
-                      >
-                        <CheckCircle size={14} /> Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => { setRejectTargetId(t.id); setShowReject(true); }}
-                      >
-                        <XCircle size={14} /> Reject
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-
-            {transferList.length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center">No transfers yet.</p>
-            )}
+      {/* ── Checklists ── */}
+      {tab === 'Checklists' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <button className="btn btn-primary" onClick={() => setShowChecklist(true)}>
+              <Plus size={14} /> Assign Checklist
+            </button>
           </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {!checklists?.length && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text3)' }}>No checklists assigned.</div>}
+            {checklists?.map(cl => <ChecklistCard key={cl.id} checklist={cl} entityType="EXPAT" entityId={id} />)}
+          </div>
+          {showChecklist && <AssignChecklistDialog entityType="EXPAT" entityId={id} onClose={() => setShowChecklist(false)} />}
+        </div>
+      )}
 
-          {/* Create Transfer Dialog */}
-          <Dialog open={showCreateTransfer} onOpenChange={setShowCreateTransfer}>
-            <DialogContent className="max-w-md">
-              <DialogHeader><DialogTitle>Request Transfer</DialogTitle></DialogHeader>
-              <form
-                onSubmit={e => { e.preventDefault(); createTransferMutation.mutate(transferForm); }}
-                className="px-5 space-y-3"
-              >
-                <div className="space-y-1">
-                  <Label>Transfer To Dormitory</Label>
-                  <Select value={transferForm.toDormitoryId} onValueChange={v => setTransferForm(p => ({ ...p, toDormitoryId: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Select dormitory (optional)" /></SelectTrigger>
-                    <SelectContent>
-                      {(dormitories?.data || dormitories || []).map(d => (
-                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+      {/* ── Transfers ── */}
+      {tab === 'Transfers' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <button className="btn btn-primary" onClick={() => setShowTransfer(true)}>
+              <Plus size={14} /> Request Transfer
+            </button>
+          </div>
+          <div style={{ borderLeft: '2px solid var(--border)', paddingLeft: 14 }}>
+            {!expat.transfers?.length && <div style={{ color: 'var(--text3)', fontSize: 13, padding: '8px 0' }}>No transfer history.</div>}
+            {expat.transfers?.map(t => (
+              <div key={t.id} className="transfer-item">
+                <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 3 }}>{formatDate(t.createdAt)} · <StatusBadge status={t.status} /></div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {[t.fromDormitory?.name, t.toDormitory?.name].filter(Boolean).join(' → ') ||
+                   [t.fromClient?.name, t.toClient?.name].filter(Boolean).join(' → ')}
                 </div>
-                <div className="space-y-1">
-                  <Label>Transfer To Client</Label>
-                  <Select value={transferForm.toClientId} onValueChange={v => setTransferForm(p => ({ ...p, toClientId: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Select client (optional)" /></SelectTrigger>
-                    <SelectContent>
-                      {(clients?.data || clients || []).map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Reason <span className="text-red-500">*</span></Label>
-                  <Input
-                    value={transferForm.reason}
-                    onChange={e => setTransferForm(p => ({ ...p, reason: e.target.value }))}
-                    placeholder="Reason for transfer"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Effective Date</Label>
-                  <Input
-                    type="date"
-                    value={transferForm.effectiveDate}
-                    onChange={e => setTransferForm(p => ({ ...p, effectiveDate: e.target.value }))}
-                  />
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setShowCreateTransfer(false)}>Cancel</Button>
-                  <Button type="submit" disabled={createTransferMutation.isPending}>
-                    {createTransferMutation.isPending ? 'Submitting...' : 'Submit Request'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          {/* Reject Dialog */}
-          <Dialog open={showReject} onOpenChange={v => { setShowReject(v); if (!v) { setRejectReason(''); setRejectTargetId(null); } }}>
-            <DialogContent className="max-w-sm">
-              <DialogHeader><DialogTitle>Reject Transfer</DialogTitle></DialogHeader>
-              <div className="px-5 space-y-3">
-                <Label>Rejection Reason</Label>
-                <Input
-                  value={rejectReason}
-                  onChange={e => setRejectReason(e.target.value)}
-                  placeholder="Provide a reason"
-                />
+                <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 1 }}>{t.reason}</div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => { setShowReject(false); setRejectReason(''); setRejectTargetId(null); }}>Cancel</Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => rejectMutation.mutate({ tid: rejectTargetId, reason: rejectReason })}
-                  disabled={!rejectReason.trim() || rejectMutation.isPending}
-                >
-                  {rejectMutation.isPending ? 'Rejecting...' : 'Reject'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </TabsContent>
-      </Tabs>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Modal */}
+      {showTransfer && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowTransfer(false)}>
+          <div className="modal">
+            <div className="modal-header">
+              <h3 style={{ fontFamily: 'Instrument Serif, serif', fontSize: 18 }}>Request Transfer</h3>
+              <button onClick={() => setShowTransfer(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text3)' }}>×</button>
+            </div>
+            <form onSubmit={handleTransfer}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ background: 'var(--amber-light)', border: '1px solid rgba(138,98,0,0.2)', borderRadius: 'var(--r-sm)', padding: '10px 12px', fontSize: 12, color: 'var(--amber)' }}>
+                  ⚠ Transfer requires Manager approval before taking effect
+                </div>
+                <div>
+                  <label className="form-label">New Dormitory</label>
+                  <select className="form-input" value={transferForm.toDormitoryId} onChange={e => setTransferForm(f => ({ ...f, toDormitoryId: e.target.value }))}>
+                    <option value="">— No change —</option>
+                    {dormList?.filter(d => d.id !== expat.dormitoryId).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Reason <span style={{ color: 'var(--accent2)' }}>*</span></label>
+                  <textarea className="form-input" rows={3} required placeholder="Reason for transfer…"
+                    value={transferForm.reason} onChange={e => setTransferForm(f => ({ ...f, reason: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="form-label">Effective Date</label>
+                  <input type="date" className="form-input" value={transferForm.effectiveDate} onChange={e => setTransferForm(f => ({ ...f, effectiveDate: e.target.value }))} />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline" onClick={() => setShowTransfer(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={transferSaving}>{transferSaving ? 'Submitting…' : 'Submit for Approval'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

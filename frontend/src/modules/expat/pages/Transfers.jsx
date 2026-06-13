@@ -1,310 +1,246 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, XCircle, Plus } from 'lucide-react';
-import { transfersApi, expatsApi, dormitoriesApi, clientsApi } from '../../../api/index.js';
-import { DataTable } from '../../../components/shared/DataTable.jsx';
-import { PageHeader } from '../../../components/shared/PageHeader.jsx';
-import { StatusBadge } from '../../../components/shared/StatusBadge.jsx';
-import { Button } from '../../../components/ui/button.jsx';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../components/ui/dialog.jsx';
-import { Input } from '../../../components/ui/input.jsx';
-import { Label } from '../../../components/ui/label.jsx';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../../components/ui/select.jsx';
-import { useToast } from '../../../components/ui/toast.jsx';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router';
+import { Check, X, Plus } from 'lucide-react';
+import { transfers as transfersApi, expats as expatsApi, clients as clientsApi, dormitories as dormsApi } from '../../../api/index.js';
+import StatusBadge from '../../../components/shared/StatusBadge.jsx';
 import { useAuthStore } from '../../../store/authStore.js';
-import { formatDate } from '../../../lib/utils.js';
+import { formatDate, getInitials, getAvatarColor } from '../../../lib/utils.js';
 
-const INITIAL_CREATE = {
-  expatId: '',
-  toDormitoryId: '',
-  toClientId: '',
-  reason: '',
-  effectiveDate: '',
-};
+const TABS = [{ key: 'PENDING', label: 'Pending Approval' }, { key: '', label: 'All Transfers' }];
 
 export default function Transfers() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
-  const { toast } = useToast();
-  const user = useAuthStore(s => s.user);
-  const canApprove = user?.role === 'SUPER_ADMIN' || user?.role === 'MANAGER';
-
+  const { hasRole } = useAuthStore();
+  const isManager = hasRole('MANAGER');
+  const [tab, setTab] = useState('PENDING');
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
-  const [showReject, setShowReject] = useState(false);
-  const [selectedId, setSelectedId] = useState(null);
-  const [rejectReason, setRejectReason] = useState('');
-  const [createForm, setCreateForm] = useState(INITIAL_CREATE);
+  const [form, setForm] = useState({ expatId: '', transferType: 'DORMITORY', toDormitoryId: '', toClientId: '', reason: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [actionLoading, setActionLoading] = useState(null);
+  const pageSize = 20;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['transfers', page, statusFilter],
-    queryFn: () => transfersApi.list({ page, status: statusFilter === 'all' ? undefined : statusFilter }),
+    queryKey: ['transfers', { status: tab, page }],
+    queryFn: () => transfersApi.list({ status: tab, page, pageSize }).then(r => r.data),
+    keepPreviousData: true,
   });
 
-  const { data: expats } = useQuery({
-    queryKey: ['expats-all'],
-    queryFn: () => expatsApi.list({}),
-  });
+  const { data: expatList } = useQuery({ queryKey: ['expats-list'], queryFn: () => expatsApi.list({ status: 'ACTIVE', pageSize: 200 }).then(r => r.data.items), enabled: showCreate });
+  const { data: dormList } = useQuery({ queryKey: ['dorms-list'], queryFn: () => dormsApi.list().then(r => r.data), enabled: showCreate });
+  const { data: clientList } = useQuery({ queryKey: ['clients-list'], queryFn: () => clientsApi.list({ pageSize: 100 }).then(r => r.data.items), enabled: showCreate });
 
-  const { data: dormitories } = useQuery({
-    queryKey: ['dorms-all'],
-    queryFn: () => dormitoriesApi.list({}),
-  });
-
-  const { data: clients } = useQuery({
-    queryKey: ['clients-all'],
-    queryFn: () => clientsApi.list({}),
-  });
-
-  const approveMutation = useMutation({
-    mutationFn: transfersApi.approve,
-    onSuccess: () => {
+  async function handleApprove(id) {
+    setActionLoading(id);
+    try {
+      await transfersApi.approve(id);
       qc.invalidateQueries({ queryKey: ['transfers'] });
-      toast({ title: 'Transfer approved', type: 'success' });
-    },
-    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error, type: 'error' }),
-  });
+    } finally {
+      setActionLoading(null);
+    }
+  }
 
-  const rejectMutation = useMutation({
-    mutationFn: ({ id, reason }) => transfersApi.reject(id, reason),
-    onSuccess: () => {
+  async function handleReject(id) {
+    const reason = window.prompt('Rejection reason (optional):');
+    if (reason === null) return;
+    setActionLoading(id);
+    try {
+      await transfersApi.reject(id, { reason });
       qc.invalidateQueries({ queryKey: ['transfers'] });
-      setShowReject(false);
-      setRejectReason('');
-      setSelectedId(null);
-      toast({ title: 'Transfer rejected', type: 'success' });
-    },
-    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error, type: 'error' }),
-  });
+    } finally {
+      setActionLoading(null);
+    }
+  }
 
-  const createMutation = useMutation({
-    mutationFn: transfersApi.create,
-    onSuccess: () => {
+  async function handleCreate(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const payload = { expatId: form.expatId, reason: form.reason };
+      if (form.transferType === 'DORMITORY') payload.toDormitoryId = form.toDormitoryId;
+      else payload.toClientId = form.toClientId;
+      await transfersApi.create(payload);
       qc.invalidateQueries({ queryKey: ['transfers'] });
       setShowCreate(false);
-      setCreateForm(INITIAL_CREATE);
-      toast({ title: 'Transfer request created', type: 'success' });
-    },
-    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error, type: 'error' }),
-  });
+      setForm({ expatId: '', transferType: 'DORMITORY', toDormitoryId: '', toClientId: '', reason: '' });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to create transfer');
+    } finally {
+      setSaving(false);
+    }
+  }
 
-  const allTransfers = data?.data || data || [];
-  const total = data?.total || (Array.isArray(allTransfers) ? allTransfers.length : 0);
-
-  const filtered = Array.isArray(allTransfers)
-    ? allTransfers.filter(t =>
-        !search ||
-        t.reason?.toLowerCase().includes(search.toLowerCase()) ||
-        t.expat?.fullName?.toLowerCase().includes(search.toLowerCase())
-      )
-    : [];
-
-  const expatList = expats?.data || expats || [];
-  const dormList = dormitories?.data || dormitories || [];
-  const clientList = clients?.data || clients || [];
-
-  const columns = [
-    {
-      key: 'expat',
-      header: 'Expat',
-      render: (v) => <span className="font-medium text-slate-800">{v?.fullName || '—'}</span>,
-    },
-    {
-      key: 'fromDormitory',
-      header: 'Dormitory From → To',
-      render: (v, row) => (
-        <span className="text-xs">
-          {v?.name || '—'} → {row.toDormitory?.name || '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'fromClient',
-      header: 'Client From → To',
-      render: (v, row) => (
-        <span className="text-xs">
-          {v?.name || '—'} → {row.toClient?.name || '—'}
-        </span>
-      ),
-    },
-    { key: 'reason', header: 'Reason' },
-    {
-      key: 'effectiveDate',
-      header: 'Effective Date',
-      render: (v) => formatDate(v),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (v) => <StatusBadge status={v} />,
-    },
-    ...(canApprove ? [{
-      key: 'id',
-      header: 'Actions',
-      sortable: false,
-      render: (_, row) => row.status === 'PENDING' ? (
-        <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-green-600 hover:text-green-700 hover:bg-green-50"
-            onClick={() => approveMutation.mutate(row.id)}
-            disabled={approveMutation.isPending}
-          >
-            <CheckCircle size={14} /> Approve
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-            onClick={() => { setSelectedId(row.id); setShowReject(true); }}
-          >
-            <XCircle size={14} /> Reject
-          </Button>
-        </div>
-      ) : null,
-    }] : []),
-  ];
+  const pendingCount = tab === 'PENDING' ? data?.total || 0 : 0;
 
   return (
     <div>
-      <PageHeader
-        title="Transfers"
-        description="Manage expat dormitory transfers"
-        actions={
-          <div className="flex gap-2">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {['PENDING', 'APPROVED', 'REJECTED'].map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus size={14} /> New Transfer
-            </Button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <div className="tab-group">
+          {TABS.map(t => (
+            <button key={t.key} className={`tab-item${tab===t.key?' active':''}`} onClick={() => { setTab(t.key); setPage(1); }}>
+              {t.label}
+              {t.key === 'PENDING' && pendingCount > 0 && (
+                <span style={{ marginLeft: 6, background: 'var(--amber)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{pendingCount}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus size={14} /> Request Transfer</button>
+        </div>
+      </div>
+
+      {tab === 'PENDING' && pendingCount > 0 && (
+        <div style={{ background: '#FFFBEB', border: '1px solid rgba(196,82,26,0.25)', borderRadius: 'var(--r)', padding: '10px 14px', marginBottom: 14, fontSize: 13, color: 'var(--amber)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          ⏳ <strong>{pendingCount} transfer{pendingCount > 1 ? 's' : ''}</strong> awaiting approval{isManager ? '' : ' — requires Manager approval'}
+        </div>
+      )}
+
+      <div className="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Expat</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Type</th>
+              <th>Requested</th>
+              <th>Status</th>
+              {isManager && tab === 'PENDING' && <th style={{ width: 120 }}>Actions</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && [1,2,3].map(i => (
+              <tr key={i} style={{ pointerEvents: 'none' }}>
+                {[1,2,3,4,5,6].map(j => <td key={j}><div className="skeleton" style={{ height: 14, width: '70%', borderRadius: 4 }} /></td>)}
+              </tr>
+            ))}
+            {!isLoading && !data?.items?.length && (
+              <tr><td colSpan={isManager && tab === 'PENDING' ? 7 : 6}><div className="empty-state"><div style={{ fontSize: 32, marginBottom: 12 }}>🔄</div><div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text2)' }}>{tab === 'PENDING' ? 'No pending transfers' : 'No transfers found'}</div></div></td></tr>
+            )}
+            {!isLoading && data?.items?.map(t => (
+              <tr key={t.id}>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className={`avatar ${getAvatarColor(t.expat?.fullName)}`}>{getInitials(t.expat?.fullName)}</div>
+                    <div>
+                      <div style={{ fontWeight: 500, fontSize: 13, cursor: 'pointer', color: 'var(--accent)' }}
+                        onClick={() => navigate(`/expats/${t.expatId}`)}>{t.expat?.fullName}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{t.expat?.expatNo}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style={{ fontSize: 12, color: 'var(--text2)' }}>
+                  {t.fromDormitory?.name || t.fromClient?.name || <span style={{ color: 'var(--text3)' }}>—</span>}
+                </td>
+                <td style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 500 }}>
+                  {t.toDormitory?.name || t.toClient?.name || <span style={{ color: 'var(--text3)' }}>—</span>}
+                </td>
+                <td>
+                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 'var(--r-sm)', background: t.toDormitory ? 'rgba(31,78,61,0.08)' : 'rgba(196,82,26,0.08)', color: t.toDormitory ? 'var(--accent)' : 'var(--accent2)' }}>
+                    {t.toDormitory ? 'Dormitory' : 'Client'}
+                  </span>
+                </td>
+                <td style={{ fontSize: 12, color: 'var(--text3)' }}>{formatDate(t.createdAt)}</td>
+                <td><StatusBadge status={t.status} /></td>
+                {isManager && tab === 'PENDING' && (
+                  <td>
+                    {t.status === 'PENDING' && (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          disabled={actionLoading === t.id}
+                          onClick={() => handleApprove(t.id)}
+                          style={{ padding: '4px 8px', color: 'var(--green)', borderColor: 'var(--green)' }}>
+                          <Check size={12} />
+                        </button>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          disabled={actionLoading === t.id}
+                          onClick={() => handleReject(t.id)}
+                          style={{ padding: '4px 8px', color: 'var(--red)', borderColor: 'var(--red)' }}>
+                          <X size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {(data?.total || 0) > pageSize && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="btn btn-outline btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹ Prev</button>
+            <span style={{ fontSize: 12, color: 'var(--text2)' }}>Page {page} of {Math.ceil(data.total / pageSize)}</span>
+            <button className="btn btn-outline btn-sm" disabled={page * pageSize >= data.total} onClick={() => setPage(p => p + 1)}>Next ›</button>
           </div>
-        }
-      />
+        )}
+      </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        loading={isLoading}
-        total={total}
-        page={page}
-        pageSize={25}
-        onPageChange={setPage}
-        onSearch={setSearch}
-        searchPlaceholder="Search by expat name or reason..."
-        emptyState="No transfers found."
-      />
-
-      {/* Create Transfer Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>New Transfer Request</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={e => { e.preventDefault(); createMutation.mutate(createForm); }}
-            className="px-5 space-y-3"
-          >
-            <div className="space-y-1">
-              <Label>Expat</Label>
-              <Select value={createForm.expatId} onValueChange={v => setCreateForm(p => ({ ...p, expatId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select expat" /></SelectTrigger>
-                <SelectContent>
-                  {Array.isArray(expatList) && expatList.map(e => (
-                    <SelectItem key={e.id} value={e.id}>{e.fullName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {showCreate && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowCreate(false)}>
+          <div className="modal">
+            <div className="modal-header">
+              <h3 style={{ fontFamily: 'Instrument Serif, serif', fontSize: 18 }}>Request Transfer</h3>
+              <button onClick={() => setShowCreate(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--text3)' }}>×</button>
             </div>
-            <div className="space-y-1">
-              <Label>Transfer To Dormitory</Label>
-              <Select value={createForm.toDormitoryId} onValueChange={v => setCreateForm(p => ({ ...p, toDormitoryId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select dormitory (optional)" /></SelectTrigger>
-                <SelectContent>
-                  {Array.isArray(dormList) && dormList.map(d => (
-                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Transfer To Client</Label>
-              <Select value={createForm.toClientId} onValueChange={v => setCreateForm(p => ({ ...p, toClientId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select client (optional)" /></SelectTrigger>
-                <SelectContent>
-                  {Array.isArray(clientList) && clientList.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Reason</Label>
-              <Input
-                value={createForm.reason}
-                onChange={e => setCreateForm(p => ({ ...p, reason: e.target.value }))}
-                placeholder="Reason for transfer"
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Effective Date</Label>
-              <Input
-                type="date"
-                value={createForm.effectiveDate}
-                onChange={e => setCreateForm(p => ({ ...p, effectiveDate: e.target.value }))}
-                required
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Submitting...' : 'Submit Request'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Reject Dialog */}
-      <Dialog open={showReject} onOpenChange={v => { setShowReject(v); if (!v) { setRejectReason(''); setSelectedId(null); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject Transfer</DialogTitle>
-          </DialogHeader>
-          <div className="px-5 space-y-3">
-            <Label>Rejection Reason</Label>
-            <Input
-              value={rejectReason}
-              onChange={e => setRejectReason(e.target.value)}
-              placeholder="Provide a reason for rejection"
-              required
-            />
+            <form onSubmit={handleCreate}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {error && <div style={{ padding: '8px 12px', background: 'var(--red-light)', color: 'var(--red)', borderRadius: 'var(--r-sm)', fontSize: 13 }}>{error}</div>}
+                <div>
+                  <label className="form-label">Expat <span style={{ color: 'var(--accent2)' }}>*</span></label>
+                  <select className="form-input" required value={form.expatId} onChange={e => setForm(f => ({ ...f, expatId: e.target.value }))}>
+                    <option value="">Select expat…</option>
+                    {expatList?.map(e => <option key={e.id} value={e.id}>{e.fullName} ({e.expatNo})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Transfer Type</label>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    {[{v:'DORMITORY',l:'Change Dormitory'},{v:'CLIENT',l:'Change Client'}].map(opt => (
+                      <label key={opt.v} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                        <input type="radio" name="ttype" value={opt.v} checked={form.transferType === opt.v} onChange={() => setForm(f => ({ ...f, transferType: opt.v, toDormitoryId: '', toClientId: '' }))} />
+                        {opt.l}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                {form.transferType === 'DORMITORY' && (
+                  <div>
+                    <label className="form-label">New Dormitory <span style={{ color: 'var(--accent2)' }}>*</span></label>
+                    <select className="form-input" required value={form.toDormitoryId} onChange={e => setForm(f => ({ ...f, toDormitoryId: e.target.value }))}>
+                      <option value="">Select dormitory…</option>
+                      {dormList?.map(d => <option key={d.id} value={d.id}>{d.name} ({d._count?.expats || 0}/{d.capacity})</option>)}
+                    </select>
+                  </div>
+                )}
+                {form.transferType === 'CLIENT' && (
+                  <div>
+                    <label className="form-label">New Client <span style={{ color: 'var(--accent2)' }}>*</span></label>
+                    <select className="form-input" required value={form.toClientId} onChange={e => setForm(f => ({ ...f, toClientId: e.target.value }))}>
+                      <option value="">Select client…</option>
+                      {clientList?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="form-label">Reason</label>
+                  <textarea className="form-input" rows={2} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder="Reason for transfer…" />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Requesting…' : 'Request Transfer'}</button>
+              </div>
+            </form>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowReject(false); setRejectReason(''); setSelectedId(null); }}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => rejectMutation.mutate({ id: selectedId, reason: rejectReason })}
-              disabled={!rejectReason.trim() || rejectMutation.isPending}
-            >
-              {rejectMutation.isPending ? 'Rejecting...' : 'Reject Transfer'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 }

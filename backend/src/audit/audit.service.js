@@ -1,31 +1,35 @@
-import { prisma } from '../config/db.js';
+import prisma from '../config/db.js';
 
-export async function writeAuditLog({ tableName, recordId, fieldName, valueFrom, valueTo, action, performedBy, ipAddress, userAgent }) {
-  await prisma.auditLog.create({
-    data: { tableName, recordId, fieldName: fieldName || '', valueFrom, valueTo, action, performedBy, ipAddress, userAgent },
-  });
-}
-
-export async function auditCreate({ tableName, recordId, data, performedBy, ipAddress, userAgent }) {
-  await writeAuditLog({ tableName, recordId, fieldName: '*', valueFrom: null, valueTo: JSON.stringify(data), action: 'CREATE', performedBy, ipAddress, userAgent });
-}
-
-export async function auditUpdate({ tableName, recordId, oldData, newData, performedBy, ipAddress, userAgent, encryptedFields = [] }) {
-  const promises = [];
-  for (const key of Object.keys(newData)) {
-    if (oldData[key] !== newData[key]) {
-      const isEncrypted = encryptedFields.includes(key);
-      promises.push(writeAuditLog({
-        tableName, recordId, fieldName: key,
-        valueFrom: isEncrypted ? '[ENCRYPTED]' : String(oldData[key] ?? ''),
-        valueTo: isEncrypted ? '[ENCRYPTED]' : String(newData[key] ?? ''),
-        action: 'UPDATE', performedBy, ipAddress, userAgent,
-      }));
-    }
+export async function logAudit({ tableName, recordId, fieldName, valueFrom, valueTo, action, req }) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        tableName,
+        recordId: String(recordId),
+        fieldName: fieldName ?? null,
+        valueFrom: valueFrom !== undefined ? String(valueFrom) : null,
+        valueTo: valueTo !== undefined ? String(valueTo) : null,
+        action,
+        performedBy: req?.user?.id ?? null,
+        ipAddress: req?.ip ?? null,
+        userAgent: req?.headers?.['user-agent'] ?? null,
+      },
+    });
+  } catch (err) {
+    console.error('[AuditService] Failed to log:', err.message);
   }
-  await Promise.all(promises);
 }
 
-export async function auditDelete({ tableName, recordId, performedBy, ipAddress, userAgent }) {
-  await writeAuditLog({ tableName, recordId, fieldName: '*', valueFrom: null, valueTo: null, action: 'DELETE', performedBy, ipAddress, userAgent });
+export async function logCreate(tableName, record, req) {
+  await logAudit({ tableName, recordId: record.id, action: 'CREATE', req });
+}
+
+export async function logUpdate(tableName, recordId, changes, req) {
+  for (const [field, { from, to }] of Object.entries(changes)) {
+    await logAudit({ tableName, recordId, fieldName: field, valueFrom: from, valueTo: to, action: 'UPDATE', req });
+  }
+}
+
+export async function logDelete(tableName, recordId, req) {
+  await logAudit({ tableName, recordId, action: 'DELETE', req });
 }

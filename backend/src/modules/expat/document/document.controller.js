@@ -1,52 +1,118 @@
-import {
-  listDocuments,
-  getExpiringDocuments,
-  uploadDocument,
-  downloadDocument,
-  deleteDocument,
-  bulkDownload,
-} from './document.service.js';
+import prisma from '../../../config/db.js';
+import { z } from 'zod';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { v4 as uuid } from 'uuid';
+import archiver from 'archiver';
+import { env } from '../../../config/env.js';
+import { logCreate, logDelete } from '../../../audit/audit.service.js';
 
-function ipOf(req) { return req.ip || req.connection?.remoteAddress; }
-function uaOf(req) { return req.headers['user-agent']; }
+const UPLOAD_DIR = path.resolve(env.UPLOAD_DIR || 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-export async function handleList(req, res, next) {
+export const upload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, uuid() + ext);
+    },
+  }),
+  limits: { fileSize: env.MAX_FILE_SIZE },
+});
+
+export async function list(req, res, next) {
   try {
-    const result = await listDocuments(req.query);
-    res.json(result);
+    const { entityType, entityId } = req.query;
+    const where = {};
+    if (entityType) where.entityType = entityType;
+    if (entityId) where.entityId = entityId;
+    const docs = await prisma.document.findMany({ where, orderBy: { createdAt: 'desc' } });
+    res.json(docs);
   } catch (err) { next(err); }
 }
 
-export async function handleGetExpiring(req, res, next) {
+export async function getExpiring(req, res, next) {
   try {
-    const result = await getExpiringDocuments(req.query.days);
-    res.json({ data: result });
+    const days = parseInt(req.query.days || '30', 10);
+    const cutoff = new Date(Date.now() + days * 86400000);
+    const docs = await prisma.document.findMany({
+      where: { expiryDate: { lte: cutoff, gte: new Date() } },
+      orderBy: { expiryDate: 'asc' },
+    });
+    res.json(docs);
   } catch (err) { next(err); }
 }
 
-export async function handleUpload(req, res, next) {
+export async function uploadDoc(req, res, next) {
   try {
-    const result = await uploadDocument(req.file, req.body, req.user.id, ipOf(req), uaOf(req));
-    res.status(201).json(result);
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const { entityType, entityId, documentType, expiryDate } = req.body;
+    if (!entityType || !entityId || !documentType) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'entityType, entityId, and documentType are required' });
+    }
+    const doc = await prisma.document.create({
+      data: {
+        entityType,
+        entityId,
+        documentType,
+        originalName: req.file.originalname,
+        storedName: req.file.filename,
+        filePath: req.file.path,
+        mimeType: req.file.mimetype,
+        fileSizeBytes: req.file.size,
+        expiryDate: expiryDate ? new Date(expiryDate) : null,
+        uploadedBy: req.user.id,
+      },
+    });
+    await logCreate('documents', doc, req);
+    res.status(201).json(doc);
   } catch (err) { next(err); }
 }
 
-export async function handleDownload(req, res, next) {
+export async function download(req, res, next) {
   try {
-    await downloadDocument(req.params.id, req, res);
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+    if (!fs.existsSync(doc.filePath)) return res.status(404).json({ error: 'File not found on disk' });
+    res.setHeader('Content-Disposition', `attachment; filename="${doc.originalName}"`);
+    res.setHeader('Content-Type', doc.mimeType);
+    res.sendFile(path.resolve(doc.filePath));
   } catch (err) { next(err); }
 }
 
-export async function handleDelete(req, res, next) {
+export async function bulkDownload(req, res, next) {
   try {
-    await deleteDocument(req.params.id, req.user.id, ipOf(req), uaOf(req));
-    res.status(204).end();
+    const { ids } = z.object({ ids: z.array(z.string()) }).parse(req.body);
+    const docs = await prisma.document.findMany({ where: { id: { in: ids } } });
+    if (!docs.length) return res.status(404).json({ error: 'No documents found' });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="documents.zip"');
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('error', err => next(err));
+    archive.pipe(res);
+
+    for (const doc of docs) {
+      if (fs.existsSync(doc.filePath)) {
+        archive.file(doc.filePath, { name: doc.originalName });
+      }
+    }
+
+    await archive.finalize();
   } catch (err) { next(err); }
 }
 
-export async function handleBulkDownload(req, res, next) {
+export async function remove(req, res, next) {
   try {
-    const { ids } = req.body;
-    await bulkDownload(ids, res);
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+    if (fs.existsSync(doc.filePath)) fs.unlinkSync(doc.filePath);
+    await prisma.document.delete({ where: { id: req.params.id } });
+    await logDelete('documents', req.params.id, req);
+    res.json({ message: 'Document deleted' });
   } catch (err) { next(err); }
 }

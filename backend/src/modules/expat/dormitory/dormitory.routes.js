@@ -1,27 +1,18 @@
 import { Router } from 'express';
 import { authenticate } from '../../../middleware/auth.js';
-import {
-  handleList,
-  handleGetById,
-  handleCreate,
-  handleUpdate,
-  handleDelete,
-  handleAssignClient,
-  handleRemoveClient,
-  handleGetOccupants,
-} from './dormitory.controller.js';
+import { isStaff } from '../../../middleware/rbac.js';
+import * as ctrl from './dormitory.controller.js';
 
 const router = Router();
+router.use(authenticate, isStaff);
 
-router.use(authenticate);
-
-router.get('/', handleList);
-router.get('/:id', handleGetById);
-router.post('/', handleCreate);
-router.patch('/:id', handleUpdate);
-router.delete('/:id', handleDelete);
-router.post('/:id/assign-client', handleAssignClient);
-router.delete('/:id/assign-client/:clientId', handleRemoveClient);
-router.get('/:id/occupants', handleGetOccupants);
+router.get('/', ctrl.list);
+router.post('/', ctrl.create);
+router.get('/:id', ctrl.get);
+router.patch('/:id', ctrl.update);
+router.delete('/:id', ctrl.remove);
+router.post('/:id/assign-client', ctrl.assignClient);
+router.delete('/:id/assign-client/:clientId', ctrl.removeClient);
+router.get('/:id/occupants', ctrl.getOccupants);
 
 export default router;

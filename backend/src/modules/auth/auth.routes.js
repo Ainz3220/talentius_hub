@@ -1,19 +1,16 @@
 import { Router } from 'express';
-import { authenticate } from '../../middleware/auth.js';
 import { authLimiter } from '../../middleware/rateLimiter.js';
-import {
-  loginHandler, verifyOtpHandler, refreshHandler,
-  logoutHandler, meHandler, verifyEmailHandler, resendVerificationHandler,
-} from './auth.controller.js';
+import { authenticate } from '../../middleware/auth.js';
+import * as ctrl from './auth.controller.js';
 
 const router = Router();
 
-router.post('/login', authLimiter, loginHandler);
-router.post('/verify-otp', authLimiter, verifyOtpHandler);
-router.post('/refresh', refreshHandler);
-router.post('/logout', authenticate, logoutHandler);
-router.get('/me', authenticate, meHandler);
-router.get('/verify-email', verifyEmailHandler);
-router.post('/resend-verification', authLimiter, resendVerificationHandler);
+router.post('/login', authLimiter, ctrl.login);
+router.post('/verify-otp', authLimiter, ctrl.verifyOtpController);
+router.post('/refresh', ctrl.refresh);
+router.post('/logout', ctrl.logout);
+router.get('/me', authenticate, ctrl.me);
+router.get('/verify-email', ctrl.verifyEmail);
+router.post('/resend-verification', ctrl.resendVerification);
 
 export default router;

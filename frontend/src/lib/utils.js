@@ -1,58 +1,63 @@
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { format, differenceInDays, parseISO, isValid } from 'date-fns';
 
-const TZ = 'Indian/Mauritius';
-
-function tzParts(d) {
-  return Object.fromEntries(
-    new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
-      .formatToParts(d)
-      .filter(x => x.type !== 'literal')
-      .map(x => [x.type, x.value])
-  );
+export function cn(...inputs) {
+  return twMerge(clsx(inputs));
 }
 
-export function cn(...inputs) { return twMerge(clsx(inputs)); }
-
-export function formatDate(date, fmt = 'DD MMM YYYY') {
+export function formatDate(date, fmt = 'dd MMM yyyy') {
   if (!date) return '—';
-  const d = new Date(date);
-  if (isNaN(d)) return '—';
-  const { year, month, day } = tzParts(d);
-  const mon = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, month: 'short' }).format(d);
-  switch (fmt) {
-    case 'DD MMM YYYY': return `${day} ${mon} ${year}`;
-    case 'MM/DD/YYYY': return `${month}/${day}/${year}`;
-    case 'YYYY-MM-DD': return `${year}-${month}-${day}`;
-    case 'DD/MM/YYYY': return `${day}/${month}/${year}`;
-    default: return `${day} ${mon} ${year}`;
-  }
+  const d = typeof date === 'string' ? parseISO(date) : new Date(date);
+  if (!isValid(d)) return '—';
+  return format(d, fmt);
 }
 
 export function daysUntil(date) {
   if (!date) return null;
-  const target = new Date(date);
-  const { year, month, day } = tzParts(new Date());
-  // Midnight at the start of today in Mauritius (UTC+4)
-  const todayMidnight = new Date(`${year}-${month}-${day}T00:00:00+04:00`);
-  return Math.ceil((target - todayMidnight) / (1000 * 60 * 60 * 24));
-}
-
-export function expiryStatus(date) {
-  const days = daysUntil(date);
-  if (days === null) return 'unknown';
-  if (days <= 0) return 'expired';
-  if (days <= 7) return 'critical';
-  if (days <= 30) return 'warning';
-  return 'ok';
+  const d = typeof date === 'string' ? parseISO(date) : new Date(date);
+  if (!isValid(d)) return null;
+  return differenceInDays(d, new Date());
 }
 
 export function getInitials(name) {
-  if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  if (!name) return '??';
+  return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
 }
 
-export function paginate(data, page, limit) {
-  const start = (page - 1) * limit;
-  return data.slice(start, start + limit);
+export function getAvatarColor(name) {
+  const colors = ['av-g', 'av-b', 'av-o', 'av-r'];
+  let sum = 0;
+  for (let i = 0; i < (name?.length || 0); i++) sum += name.charCodeAt(i);
+  return colors[sum % colors.length];
+}
+
+export function formatFileSize(bytes) {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+export function getExpiryClass(daysLeft) {
+  if (daysLeft === null) return '';
+  if (daysLeft <= 0) return 'text-[var(--red)] font-semibold';
+  if (daysLeft <= 7) return 'text-[var(--red)] font-semibold';
+  if (daysLeft <= 30) return 'text-[var(--accent2)] font-medium';
+  return 'text-[var(--text2)]';
+}
+
+export function getExpiryLabel(daysLeft) {
+  if (daysLeft === null) return '';
+  if (daysLeft < 0) return `Expired ${Math.abs(daysLeft)}d ago`;
+  if (daysLeft === 0) return 'Expires today';
+  if (daysLeft <= 7) return `⚠ ${daysLeft}d left`;
+  if (daysLeft <= 30) return `${daysLeft}d left`;
+  return '';
+}
+
+export function truncate(str, len = 40) {
+  if (!str) return '';
+  return str.length > len ? str.slice(0, len) + '…' : str;
 }

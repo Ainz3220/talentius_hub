@@ -1,45 +1,41 @@
 import crypto from 'crypto';
+import { env } from './env.js';
 
 const ALGORITHM = 'aes-256-gcm';
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY || '0'.repeat(64), 'hex');
+const KEY = Buffer.from(env.ENCRYPTION_KEY, 'hex');
+const IV_LENGTH = 12;
+const TAG_LENGTH = 16;
 
-export function encrypt(plaintext) {
-  if (plaintext === null || plaintext === undefined) return plaintext;
-  const iv = crypto.randomBytes(12);
+export function encrypt(text) {
+  if (!text) return null;
+  const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
-  const encrypted = Buffer.concat([cipher.update(String(plaintext), 'utf8'), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-  return `${iv.toString('base64')}:${authTag.toString('base64')}:${encrypted.toString('base64')}`;
+  const encrypted = Buffer.concat([cipher.update(String(text), 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, encrypted]).toString('base64');
 }
 
-export function normalizeEmail(email) {
-  return String(email).toLowerCase().trim();
-}
-
-export function hashForLookup(plaintext) {
-  if (plaintext === null || plaintext === undefined) return null;
-  return crypto.createHmac('sha256', KEY)
-    .update(normalizeEmail(plaintext), 'utf8')
-    .digest('hex');
-}
-
-export function decrypt(ciphertext) {
-  if (ciphertext === null || ciphertext === undefined) return ciphertext;
+export function decrypt(encoded) {
+  if (!encoded) return null;
   try {
-    const [ivB64, authTagB64, encryptedB64] = ciphertext.split(':');
-    const iv = Buffer.from(ivB64, 'base64');
-    const authTag = Buffer.from(authTagB64, 'base64');
-    const encrypted = Buffer.from(encryptedB64, 'base64');
+    const buf = Buffer.from(encoded, 'base64');
+    const iv = buf.subarray(0, IV_LENGTH);
+    const tag = buf.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
+    const encrypted = buf.subarray(IV_LENGTH + TAG_LENGTH);
     const decipher = crypto.createDecipheriv(ALGORITHM, KEY, iv);
-    decipher.setAuthTag(authTag);
-    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+    decipher.setAuthTag(tag);
+    return decipher.update(encrypted) + decipher.final('utf8');
   } catch {
     return null;
   }
 }
 
-export function maskValue(plaintext) {
-  if (!plaintext) return '🔒 ••••';
-  const last4 = plaintext.slice(-4);
-  return `🔒 ••••${last4}`;
+export function hmac(text) {
+  if (!text) return null;
+  return crypto.createHmac('sha256', env.HMAC_SECRET).update(String(text).toLowerCase()).digest('hex');
+}
+
+export function maskPassport(decrypted) {
+  if (!decrypted) return '••••';
+  return '••••' + String(decrypted).slice(-4);
 }

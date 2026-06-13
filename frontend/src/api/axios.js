@@ -1,46 +1,70 @@
 import axios from 'axios';
-import { useAuthStore } from '../store/authStore.js';
 
-const api = axios.create({ baseURL: '/api', withCredentials: true });
+const api = axios.create({
+  baseURL: '/api',
+  withCredentials: true,
+});
+
+let isRefreshing = false;
+let failedQueue = [];
+
+function processQueue(error, token = null) {
+  failedQueue.forEach(prom => {
+    if (error) prom.reject(error);
+    else prom.resolve(token);
+  });
+  failedQueue = [];
+}
 
 api.interceptors.request.use(config => {
-  const token = useAuthStore.getState().token;
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const stored = localStorage.getItem('expatflow-auth');
+  if (stored) {
+    try {
+      const { state } = JSON.parse(stored);
+      if (state?.token) config.headers.Authorization = `Bearer ${state.token}`;
+    } catch {}
+  }
   return config;
 });
 
-let refreshing = null;
-let redirecting = false;
-
-function forceLogout() {
-  if (redirecting) return;
-  redirecting = true;
-  useAuthStore.getState().logout();
-  window.location.replace('/login');
-}
-
 api.interceptors.response.use(
-  r => r,
+  res => res,
   async err => {
-    const original = err.config;
-    // Don't intercept the refresh call itself to avoid infinite loops
-    if (err.response?.status === 401 && !original._retry && !original.url?.includes('/auth/refresh')) {
-      original._retry = true;
-      if (!refreshing) {
-        refreshing = api.post('/auth/refresh').then(r => {
-          useAuthStore.getState().setToken(r.data.accessToken);
-        }).catch(() => {
-          forceLogout();
-        }).finally(() => {
-          refreshing = null;
+    const originalRequest = err.config;
+    if (err.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return api(originalRequest);
         });
       }
-      await refreshing;
-      // If logout was triggered during refresh, don't retry
-      if (!useAuthStore.getState().token) {
-        return Promise.reject(err);
+      originalRequest._retry = true;
+      isRefreshing = true;
+      try {
+        const { data } = await axios.post('/api/auth/refresh', {}, { withCredentials: true });
+        const token = data.accessToken;
+        // Update zustand store
+        const stored = localStorage.getItem('expatflow-auth');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          parsed.state.token = token;
+          localStorage.setItem('expatflow-auth', JSON.stringify(parsed));
+        }
+        originalRequest.headers.Authorization = `Bearer ${token}`;
+        processQueue(null, token);
+        return api(originalRequest);
+      } catch (refreshErr) {
+        processQueue(refreshErr, null);
+        localStorage.removeItem('expatflow-auth');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(refreshErr);
+      } finally {
+        isRefreshing = false;
       }
-      return api(original);
     }
     return Promise.reject(err);
   }

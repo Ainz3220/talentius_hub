@@ -1,130 +1,143 @@
 import api from './axios.js';
 
-// Auth
-export const authApi = {
-  login: (d) => api.post('/auth/login', d).then(r => r.data),
-  verifyOtp: (d) => api.post('/auth/verify-otp', d).then(r => r.data),
-  logout: () => api.post('/auth/logout').then(r => r.data),
-  me: () => api.get('/auth/me').then(r => r.data),
-  verifyEmail: (token) => api.get(`/auth/verify-email?token=${token}`).then(r => r.data),
-  resendVerification: (email) => api.post('/auth/resend-verification', { email }).then(r => r.data),
+// ── Auth ──────────────────────────────────────────
+export const auth = {
+  login: (data) => api.post('/auth/login', data),
+  verifyOtp: (data) => api.post('/auth/verify-otp', data),
+  refresh: () => api.post('/auth/refresh'),
+  logout: () => api.post('/auth/logout'),
+  me: () => api.get('/auth/me'),
+  verifyEmail: (token) => api.get(`/auth/verify-email?token=${token}`),
+  resendVerification: (email) => api.post('/auth/resend-verification', { email }),
 };
 
-// Users
-export const usersApi = {
-  list: () => api.get('/users').then(r => r.data),
-  get: (id) => api.get(`/users/${id}`).then(r => r.data),
-  create: (d) => api.post('/users', d).then(r => r.data),
-  update: (id, d) => api.patch(`/users/${id}`, d).then(r => r.data),
-  verify: (id) => api.patch(`/users/${id}/verify`).then(r => r.data),
-  resendVerification: (id) => api.post(`/users/${id}/resend-verification`).then(r => r.data),
-  delete: (id) => api.delete(`/users/${id}`).then(r => r.data),
+// ── Users ─────────────────────────────────────────
+export const users = {
+  list: () => api.get('/users'),
+  get: (id) => api.get(`/users/${id}`),
+  create: (data) => api.post('/users', data),
+  update: (id, data) => api.patch(`/users/${id}`, data),
+  remove: (id) => api.delete(`/users/${id}`),
+  verify: (id) => api.post(`/users/${id}/verify`),
 };
 
-// Settings
-export const settingsApi = {
-  get: () => api.get('/settings').then(r => r.data),
-  update: (d) => api.patch('/settings', d).then(r => r.data),
-  reset: () => api.post('/settings/reset').then(r => r.data),
+// ── Settings ──────────────────────────────────────
+export const settings = {
+  get: () => api.get('/settings'),
+  update: (data) => api.patch('/settings', data),
+  reset: () => api.post('/settings/reset'),
 };
 
-// Clients
-export const clientsApi = {
-  list: (p) => api.get('/clients', { params: p }).then(r => r.data),
-  get: (id) => api.get(`/clients/${id}`).then(r => r.data),
-  create: (d) => api.post('/clients', d).then(r => r.data),
-  update: (id, d) => api.patch(`/clients/${id}`, d).then(r => r.data),
-  delete: (id) => api.delete(`/clients/${id}`),
-  expats: (id) => api.get(`/clients/${id}/expats`).then(r => r.data),
+// ── Expats ────────────────────────────────────────
+export const expats = {
+  list: (params) => api.get('/expats', { params }),
+  get: (id) => api.get(`/expats/${id}`),
+  create: (data) => api.post('/expats', data),
+  update: (id, data) => api.patch(`/expats/${id}`, data),
+  updateStatus: (id, status) => api.patch(`/expats/${id}/status`, { status }),
+  remove: (id) => api.delete(`/expats/${id}`),
+  getTransfers: (id) => api.get(`/expats/${id}/transfers`),
 };
 
-// Dormitories
-export const dormitoriesApi = {
-  list: (p) => api.get('/dormitories', { params: p }).then(r => r.data),
-  get: (id) => api.get(`/dormitories/${id}`).then(r => r.data),
-  create: (d) => api.post('/dormitories', d).then(r => r.data),
-  update: (id, d) => api.patch(`/dormitories/${id}`, d).then(r => r.data),
-  delete: (id) => api.delete(`/dormitories/${id}`),
-  assignClient: (id, d) => api.post(`/dormitories/${id}/assign-client`, d).then(r => r.data),
+// ── Clients ───────────────────────────────────────
+export const clients = {
+  list: (params) => api.get('/clients', { params }),
+  get: (id) => api.get(`/clients/${id}`),
+  create: (data) => api.post('/clients', data),
+  update: (id, data) => api.patch(`/clients/${id}`, data),
+  remove: (id) => api.delete(`/clients/${id}`),
+  getExpats: (id) => api.get(`/clients/${id}/expats`),
+};
+
+// ── Dormitories ───────────────────────────────────
+export const dormitories = {
+  list: (params) => api.get('/dormitories', { params }),
+  get: (id) => api.get(`/dormitories/${id}`),
+  create: (data) => api.post('/dormitories', data),
+  update: (id, data) => api.patch(`/dormitories/${id}`, data),
+  remove: (id) => api.delete(`/dormitories/${id}`),
+  assignClient: (id, clientId) => api.post(`/dormitories/${id}/assign-client`, { clientId }),
   removeClient: (id, clientId) => api.delete(`/dormitories/${id}/assign-client/${clientId}`),
-  occupants: (id) => api.get(`/dormitories/${id}/occupants`).then(r => r.data),
+  getOccupants: (id) => api.get(`/dormitories/${id}/occupants`),
 };
 
-// Expats
-export const expatsApi = {
-  list: (p) => api.get('/expats', { params: p }).then(r => r.data),
-  get: (id) => api.get(`/expats/${id}`).then(r => r.data),
-  create: (d) => api.post('/expats', d).then(r => r.data),
-  update: (id, d) => api.patch(`/expats/${id}`, d).then(r => r.data),
-  updateStatus: (id, status) => api.patch(`/expats/${id}/status`, { status }).then(r => r.data),
-  delete: (id) => api.delete(`/expats/${id}`),
-  transfers: (id) => api.get(`/expats/${id}/transfers`).then(r => r.data),
+// ── Transfers ─────────────────────────────────────
+export const transfers = {
+  list: (params) => api.get('/transfers', { params }),
+  get: (id) => api.get(`/transfers/${id}`),
+  create: (data) => api.post('/transfers', data),
+  approve: (id) => api.patch(`/transfers/${id}/approve`),
+  reject: (id, reason) => api.patch(`/transfers/${id}/reject`, { reason }),
 };
 
-// Transfers
-export const transfersApi = {
-  list: (p) => api.get('/transfers', { params: p }).then(r => r.data),
-  get: (id) => api.get(`/transfers/${id}`).then(r => r.data),
-  create: (d) => api.post('/transfers', d).then(r => r.data),
-  approve: (id) => api.patch(`/transfers/${id}/approve`).then(r => r.data),
-  reject: (id, rejectedReason) => api.patch(`/transfers/${id}/reject`, { rejectedReason }).then(r => r.data),
+// ── Documents ─────────────────────────────────────
+export const documents = {
+  list: (params) => api.get('/documents', { params }),
+  expiring: (days = 30) => api.get(`/documents/expiring?days=${days}`),
+  upload: (formData) => api.post('/documents/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  download: (id) => api.get(`/documents/${id}/download`, { responseType: 'blob' }),
+  bulkDownload: (ids) => api.post('/documents/bulk-download', { ids }, { responseType: 'blob' }),
+  remove: (id) => api.delete(`/documents/${id}`),
 };
 
-// Documents
-export const documentsApi = {
-  list: (p) => api.get('/documents', { params: p }).then(r => r.data),
-  expiring: (days) => api.get('/documents/expiring', { params: { days } }).then(r => r.data),
-  upload: (formData) => api.post('/documents', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
-  download: (id) => api.get(`/documents/${id}/download`, { responseType: 'blob' }).then(r => r.data),
-  bulkDownload: (ids) => api.post('/documents/bulk-download', { ids }, { responseType: 'blob' }).then(r => r.data),
-  delete: (id) => api.delete(`/documents/${id}`),
-};
+// ── Checklists ────────────────────────────────────
+export const checklists = {
+  listTemplates: () => api.get('/checklists/templates'),
+  createTemplate: (data) => api.post('/checklists/templates', data),
+  updateTemplate: (id, data) => api.patch(`/checklists/templates/${id}`, data),
+  deleteTemplate: (id) => api.delete(`/checklists/templates/${id}`),
+  addTemplateItem: (id, data) => api.post(`/checklists/templates/${id}/items`, data),
+  updateTemplateItem: (tplId, itemId, data) => api.patch(`/checklists/templates/${tplId}/items/${itemId}`, data),
+  deleteTemplateItem: (tplId, itemId) => api.delete(`/checklists/templates/${tplId}/items/${itemId}`),
 
-// Checklists
-export const checklistsApi = {
-  // Templates
-  listTemplates: (p) => api.get('/checklist-templates', { params: p }).then(r => r.data),
-  getTemplate: (id) => api.get(`/checklist-templates/${id}`).then(r => r.data),
-  createTemplate: (d) => api.post('/checklist-templates', d).then(r => r.data),
-  updateTemplate: (id, d) => api.patch(`/checklist-templates/${id}`, d).then(r => r.data),
-  deleteTemplate: (id) => api.delete(`/checklist-templates/${id}`),
-  addTemplateItem: (id, d) => api.post(`/checklist-templates/${id}/items`, d).then(r => r.data),
-  updateTemplateItem: (id, itemId, d) => api.patch(`/checklist-templates/${id}/items/${itemId}`, d).then(r => r.data),
-  deleteTemplateItem: (id, itemId) => api.delete(`/checklist-templates/${id}/items/${itemId}`),
-  // Instances
-  list: (p) => api.get('/checklists', { params: p }).then(r => r.data),
-  get: (id) => api.get(`/checklists/${id}`).then(r => r.data),
-  create: (d) => api.post('/checklists', d).then(r => r.data),
+  list: (params) => api.get('/checklists', { params }),
+  get: (id) => api.get(`/checklists/${id}`),
+  create: (data) => api.post('/checklists', data),
   archive: (id) => api.delete(`/checklists/${id}`),
-  updateItem: (id, itemId, d) => api.patch(`/checklists/${id}/items/${itemId}`, d).then(r => r.data),
+  updateItem: (id, itemId, data) => api.patch(`/checklists/${id}/items/${itemId}`, data),
 };
 
-// Audit
-export const auditApi = {
-  list: (p) => api.get('/audit', { params: p }).then(r => r.data),
-  export: (p) => api.get('/audit/export', { params: { ...p, format: 'csv' }, responseType: 'blob' }).then(r => r.data),
+// ── Audit ─────────────────────────────────────────
+export const audit = {
+  list: (params) => api.get('/audit', { params }),
+  export: (params) => api.get('/audit/export', { params, responseType: 'blob' }),
 };
 
-// Notifications
-export const notificationsApi = {
-  list: () => api.get('/notifications').then(r => r.data),
-  markRead: (id) => api.patch(`/notifications/${id}/read`).then(r => r.data),
-  markAllRead: () => api.patch('/notifications/read-all').then(r => r.data),
-  delete: (id) => api.delete(`/notifications/${id}`),
+// ── Notifications ─────────────────────────────────
+export const notifications = {
+  list: (params) => api.get('/notifications', { params }),
+  markRead: (id) => api.patch(`/notifications/${id}/mark-read`),
+  markAllRead: () => api.patch('/notifications/mark-all-read'),
+  remove: (id) => api.delete(`/notifications/${id}`),
 };
 
-// Search
-export const searchApi = {
-  search: (q, type = 'all') => api.get('/search', { params: { q, type } }).then(r => r.data),
+// ── Search ────────────────────────────────────────
+export const search = {
+  global: (q, type) => api.get('/search', { params: { q, type } }),
 };
 
-// Webhooks
-export const webhooksApi = {
-  list: () => api.get('/webhooks').then(r => r.data),
-  get: (id) => api.get(`/webhooks/${id}`).then(r => r.data),
-  create: (d) => api.post('/webhooks', d).then(r => r.data),
-  update: (id, d) => api.patch(`/webhooks/${id}`, d).then(r => r.data),
-  delete: (id) => api.delete(`/webhooks/${id}`),
-  test: (id) => api.post(`/webhooks/${id}/test`).then(r => r.data),
-  logs: (id, p) => api.get(`/webhooks/${id}/logs`, { params: p }).then(r => r.data),
+// ── Webhooks ──────────────────────────────────────
+export const webhooks = {
+  list: () => api.get('/webhooks'),
+  create: (data) => api.post('/webhooks', data),
+  get: (id) => api.get(`/webhooks/${id}`),
+  update: (id, data) => api.patch(`/webhooks/${id}`, data),
+  remove: (id) => api.delete(`/webhooks/${id}`),
+  test: (id) => api.post(`/webhooks/${id}/test`),
+  logs: (id) => api.get(`/webhooks/${id}/logs`),
+};
+
+// ── Dashboard helpers ─────────────────────────────
+export const dashboard = {
+  stats: () => Promise.all([
+    api.get('/expats', { params: { status: 'ACTIVE', pageSize: 1 } }),
+    api.get('/documents/expiring', { params: { days: 30 } }),
+    api.get('/transfers', { params: { status: 'PENDING', pageSize: 1 } }),
+    api.get('/clients', { params: { status: 'ACTIVE', pageSize: 1 } }),
+  ]).then(([expatRes, docsRes, transferRes, clientRes]) => ({
+    activeExpats: expatRes.data.total,
+    expiringDocs: docsRes.data.length,
+    pendingTransfers: transferRes.data.total,
+    activeClients: clientRes.data.total,
+  })),
 };

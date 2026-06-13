@@ -1,25 +1,17 @@
 import { Router } from 'express';
 import { authenticate } from '../../../middleware/auth.js';
-import {
-  handleList,
-  handleGetById,
-  handleCreate,
-  handleUpdate,
-  handleUpdateStatus,
-  handleDelete,
-} from './expat.controller.js';
-import { handleGetExpatTransfers } from '../transfer/transfer.controller.js';
+import { isStaff } from '../../../middleware/rbac.js';
+import * as ctrl from './expat.controller.js';
 
 const router = Router();
+router.use(authenticate, isStaff);
 
-router.use(authenticate);
-
-router.get('/', handleList);
-router.get('/:id', handleGetById);
-router.post('/', handleCreate);
-router.patch('/:id', handleUpdate);
-router.patch('/:id/status', handleUpdateStatus);
-router.delete('/:id', handleDelete);
-router.get('/:id/transfers', handleGetExpatTransfers);
+router.get('/', ctrl.list);
+router.post('/', ctrl.create);
+router.get('/:id', ctrl.get);
+router.patch('/:id', ctrl.update);
+router.patch('/:id/status', ctrl.updateStatus);
+router.delete('/:id', ctrl.remove);
+router.get('/:id/transfers', ctrl.getTransfers);
 
 export default router;

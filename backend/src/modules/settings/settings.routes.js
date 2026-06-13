@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth.js';
-import { requireRole } from '../../middleware/rbac.js';
-import { getSettingsHandler, updateSettingsHandler, resetSettingsHandler } from './settings.controller.js';
+import { isSuperAdmin, isStaff } from '../../middleware/rbac.js';
+import * as ctrl from './settings.controller.js';
 
 const router = Router();
+router.use(authenticate);
 
-router.get('/', authenticate, getSettingsHandler);
-router.patch('/', authenticate, requireRole('SUPER_ADMIN'), updateSettingsHandler);
-router.post('/reset', authenticate, requireRole('SUPER_ADMIN'), resetSettingsHandler);
+router.get('/', isStaff, ctrl.get);
+router.patch('/', isSuperAdmin, ctrl.update);
+router.post('/reset', isSuperAdmin, ctrl.reset);
 
 export default router;

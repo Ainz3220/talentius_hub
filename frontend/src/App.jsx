@@ -1,12 +1,11 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
 import { useEffect } from 'react';
-import { useAuthStore } from './store/authStore.js';
 import { useSettingsStore } from './store/settingsStore.js';
-import api from './api/axios.js';
+import { useAuthStore } from './store/authStore.js';
 import PrivateRoute from './components/shared/PrivateRoute.jsx';
 import Layout from './components/shared/Layout.jsx';
-import LoginPage from './modules/expat/pages/Login.jsx';
-import VerifyEmailPage from './pages/VerifyEmail.jsx';
+import Login from './modules/expat/pages/Login.jsx';
+import VerifyEmail from './modules/expat/pages/VerifyEmail.jsx';
 import Dashboard from './modules/expat/pages/Dashboard.jsx';
 import Expats from './modules/expat/pages/Expats.jsx';
 import ExpatDetail from './modules/expat/pages/ExpatDetail.jsx';
@@ -17,47 +16,50 @@ import DormitoryDetail from './modules/expat/pages/DormitoryDetail.jsx';
 import Transfers from './modules/expat/pages/Transfers.jsx';
 import Checklists from './modules/expat/pages/Checklists.jsx';
 import AuditTrail from './modules/expat/pages/AuditTrail.jsx';
-import Settings from './pages/Settings.jsx';
+import Settings from './modules/expat/pages/Settings.jsx';
 
-export default function App() {
-  const token = useAuthStore(s => s.token);
-  const { loadSettings } = useSettingsStore();
-
-  // Verify session is still valid on every app mount (e.g. after backend restart)
-  useEffect(() => {
-    if (!useAuthStore.getState().token) return;
-    api.get('/auth/me').then(r => {
-      useAuthStore.getState().setUser(r.data);
-    }).catch(() => {
-      // interceptor handles logout + redirect on 401
-    });
-  }, []);
+function AppInit() {
+  const { loadSettings, settings } = useSettingsStore();
+  const { token } = useAuthStore();
 
   useEffect(() => {
     if (token) loadSettings();
-  }, [token, loadSettings]);
+  }, [token]);
 
+  useEffect(() => {
+    if (settings?.accentColor) {
+      document.documentElement.style.setProperty('--accent', settings.accentColor);
+    }
+  }, [settings?.accentColor]);
+
+  return null;
+}
+
+export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/verify-email" element={<VerifyEmailPage />} />
-      <Route element={<PrivateRoute />}>
-        <Route element={<Layout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/expats" element={<Expats />} />
-          <Route path="/expats/:id" element={<ExpatDetail />} />
-          <Route path="/clients" element={<Clients />} />
-          <Route path="/clients/:id" element={<ClientDetail />} />
-          <Route path="/dormitories" element={<Dormitories />} />
-          <Route path="/dormitories/:id" element={<DormitoryDetail />} />
-          <Route path="/transfers" element={<Transfers />} />
-          <Route path="/checklists" element={<Checklists />} />
-          <Route path="/audit" element={<AuditTrail />} />
-          <Route path="/settings" element={<Settings />} />
+    <BrowserRouter>
+      <AppInit />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route element={<PrivateRoute />}>
+          <Route element={<Layout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/expats" element={<Expats />} />
+            <Route path="/expats/:id" element={<ExpatDetail />} />
+            <Route path="/clients" element={<Clients />} />
+            <Route path="/clients/:id" element={<ClientDetail />} />
+            <Route path="/dormitories" element={<Dormitories />} />
+            <Route path="/dormitories/:id" element={<DormitoryDetail />} />
+            <Route path="/transfers" element={<Transfers />} />
+            <Route path="/checklists" element={<Checklists />} />
+            <Route path="/audit" element={<AuditTrail />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Route>
         </Route>
-      </Route>
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }

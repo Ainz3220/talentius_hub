@@ -1,233 +1,154 @@
 import { useQuery } from '@tanstack/react-query';
-import { expatsApi, documentsApi, transfersApi, checklistsApi, dormitoriesApi } from '../../../api/index.js';
-import { Skeleton } from '../../../components/ui/skeleton.jsx';
-import { daysUntil } from '../../../lib/utils.js';
-import { useSettingsStore } from '../../../store/settingsStore.js';
+import { useNavigate } from 'react-router';
+import { expats as expatsApi, documents as docsApi, transfers as transfersApi, clients as clientsApi, dormitories as dormsApi } from '../../../api/index.js';
+import StatusBadge from '../../../components/shared/StatusBadge.jsx';
+import { formatDate, daysUntil, getInitials, getAvatarColor } from '../../../lib/utils.js';
 
-function has(widgets, key) {
-  if (!widgets || widgets.length === 0) return true;
-  return widgets.includes(key);
-}
-
-function KpiCard({ label, value, loading, variant }) {
+function KpiCard({ label, value, sub, subColor, warn, onClick }) {
   return (
-    <div className={`kpi-card${variant ? ` ${variant}` : ''}`}>
-      <div className="kpi-label">{label}</div>
-      {loading
-        ? <Skeleton style={{ height: 40, width: 80, marginTop: 4 }} />
-        : <div className="kpi-value">{value ?? 0}</div>
-      }
+    <div className="kpi-card" onClick={onClick} style={{ cursor: onClick ? 'pointer' : undefined }}>
+      <div style={{ fontSize: 11, color: 'var(--text3)', letterSpacing: '0.5px', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 32, color: warn ? 'var(--accent2)' : 'var(--accent)', lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 5 }}><span style={{ fontWeight: 600, color: subColor }}>{sub}</span></div>}
     </div>
   );
 }
 
 export default function Dashboard() {
-  const settings = useSettingsStore(s => s.settings);
-  const widgets = settings?.dashboardWidgets ?? [];
+  const navigate = useNavigate();
 
-  const showKpi        = has(widgets, 'kpi');
-  const showAlerts     = has(widgets, 'doc-alerts');
-  const showTransfers  = has(widgets, 'transfers');
-  const showChecklists = has(widgets, 'checklists');
-  const showOccupancy  = has(widgets, 'occupancy');
+  const { data: activeExpats } = useQuery({ queryKey: ['expats-active-count'], queryFn: () => expatsApi.list({ status: 'ACTIVE', pageSize: 1 }).then(r => r.data.total) });
+  const { data: newJoiners } = useQuery({ queryKey: ['expats-new-this-month'], queryFn: () => {
+    const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
+    return expatsApi.list({ status: 'ACTIVE', createdAfter: start.toISOString(), pageSize: 1 }).then(r => r.data.total);
+  } });
+  const { data: unassignedExpats } = useQuery({ queryKey: ['expats-unassigned-count'], queryFn: () => expatsApi.list({ unassigned: true, pageSize: 1 }).then(r => r.data.total) });
+  const { data: expiringDocs } = useQuery({ queryKey: ['docs-expiring-30'], queryFn: () => docsApi.expiring(30).then(r => r.data) });
+  const { data: pendingTransfers } = useQuery({ queryKey: ['transfers-pending'], queryFn: () => transfersApi.list({ status: 'PENDING', pageSize: 5 }).then(r => r.data) });
+  const { data: activeClients } = useQuery({ queryKey: ['clients-active-count'], queryFn: () => clientsApi.list({ status: 'ACTIVE', pageSize: 1 }).then(r => r.data.total) });
+  const { data: companyClients } = useQuery({ queryKey: ['clients-company-count'], queryFn: () => clientsApi.list({ status: 'ACTIVE', type: 'COMPANY', pageSize: 1 }).then(r => r.data.total) });
+  const { data: individualClients } = useQuery({ queryKey: ['clients-individual-count'], queryFn: () => clientsApi.list({ status: 'ACTIVE', type: 'INDIVIDUAL', pageSize: 1 }).then(r => r.data.total) });
+  const { data: dorms } = useQuery({ queryKey: ['dormitories-all'], queryFn: () => dormsApi.list().then(r => r.data) });
 
-  const { data: expats, isLoading: loadingExpats } = useQuery({
-    queryKey: ['expats'],
-    queryFn: () => expatsApi.list({}),
-    enabled: showKpi,
-  });
-
-  const { data: expiring, isLoading: loadingExpiring } = useQuery({
-    queryKey: ['docs-expiring'],
-    queryFn: () => documentsApi.expiring(settings?.docAlertDays1 || 30),
-    enabled: showKpi || showAlerts,
-  });
-
-  const { data: transfers, isLoading: loadingTransfers } = useQuery({
-    queryKey: ['transfers-pending'],
-    queryFn: () => transfersApi.list({ status: 'PENDING' }),
-    enabled: showKpi || showTransfers,
-  });
-
-  const { data: checklists, isLoading: loadingChecklists } = useQuery({
-    queryKey: ['checklists-dashboard'],
-    queryFn: () => checklistsApi.list({ status: 'IN_PROGRESS', limit: 10 }),
-    enabled: showChecklists,
-  });
-
-  const { data: dormitories, isLoading: loadingDormitories } = useQuery({
-    queryKey: ['dormitories-dashboard'],
-    queryFn: () => dormitoriesApi.list({}),
-    enabled: showOccupancy,
-  });
-
-  const expatList     = expats?.data || expats || [];
-  const active        = Array.isArray(expatList) ? expatList.filter(e => e.status === 'ACTIVE').length : 0;
-  const pending       = Array.isArray(expatList) ? expatList.filter(e => e.status === 'PENDING').length : 0;
-  const expiringList  = expiring?.data || (Array.isArray(expiring) ? expiring : []);
-  const transferList  = transfers?.data || transfers || [];
-  const checklistList = checklists?.data || [];
-  const dormList      = dormitories?.data || [];
+  const urgentDocs = expiringDocs?.filter(d => daysUntil(d.expiryDate) <= 7) || [];
 
   return (
     <div>
-      {showKpi && (
-        <div className="kpi-grid">
-          <KpiCard label="Active Expats"      value={active}       loading={loadingExpats}    variant="ok" />
-          <KpiCard label="Docs Expiring (30d)" value={expiringList.length} loading={loadingExpiring}  variant={expiringList.length > 0 ? 'warn' : ''} />
-          <KpiCard label="Pending Transfers"  value={Array.isArray(transferList) ? transferList.length : transfers?.total ?? 0} loading={loadingTransfers} />
-          <KpiCard label="Pending Expats"     value={pending}      loading={loadingExpats} />
-        </div>
-      )}
+      {/* KPI Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 24 }} className="kpi-grid">
+        <KpiCard label="ACTIVE EXPATS" value={activeExpats ?? 0} sub={newJoiners ? `+${newJoiners} this month` : 'current'} subColor="var(--green)" />
+        <KpiCard label="UNASSIGNED EXPATS" value={unassignedExpats ?? 0} sub="no client assigned" subColor="var(--amber)" warn={(unassignedExpats ?? 0) > 0} onClick={() => navigate('/expats?unassigned=true')} />
+        <KpiCard label="DOCS EXPIRING (30D)" value={expiringDocs?.length ?? 0} sub={urgentDocs.length > 0 ? `${urgentDocs.length} in 7 days` : 'none urgent'} subColor="var(--red)" warn={urgentDocs.length > 0} />
+        <KpiCard label="PENDING TRANSFERS" value={pendingTransfers?.total ?? 0} sub="awaiting approval" subColor="var(--amber)" warn={(pendingTransfers?.total || 0) > 0} />
+        <KpiCard label="ACTIVE CLIENTS" value={activeClients ?? 0} sub={`${companyClients ?? 0} companies · ${individualClients ?? 0} individual`} subColor="var(--text3)" />
+      </div>
 
+      {/* Alerts + Transfers grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        {showAlerts && (
-          <div className="table-card">
+        {/* Alerts */}
+        <div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>
             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, fontSize: 13 }}>Active Alerts</span>
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--accent)', cursor: 'pointer' }}>View all</span>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>🔔 Active Alerts</span>
+              <button onClick={() => navigate('/expats')} style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', fontFamily: 'inherit' }}>View all</button>
             </div>
-            {loadingExpiring ? (
-              <div style={{ padding: 16 }}><Skeleton style={{ height: 80 }} /></div>
-            ) : expiringList.length === 0 ? (
-              <EmptyState text="No expiring documents" />
-            ) : (
-              <div>
-                {expiringList.slice(0, 6).map(doc => {
-                  const days = daysUntil(doc.expiryDate);
-                  const isDanger = days <= 7;
-                  return (
-                    <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--border)', transition: 'background 0.12s', cursor: 'pointer' }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: isDanger ? 'var(--red)' : 'var(--amber)' }} />
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{doc.documentType}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{doc.entityType}</div>
-                      </div>
-                      <div style={{ marginLeft: 'auto', fontSize: 11, color: isDanger ? 'var(--red)' : 'var(--amber)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {days <= 0 ? 'Expired' : `${days}d left`}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+            {!expiringDocs?.length && (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>No active alerts</div>
             )}
+            {expiringDocs?.slice(0, 6).map(doc => {
+              const days = daysUntil(doc.expiryDate);
+              const danger = days !== null && days <= 7;
+              return (
+                <div key={doc.id} className="alert-item">
+                  <div className="alert-dot" style={{ background: danger ? 'var(--red)' : 'var(--amber)' }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>
+                      {doc.documentType} expiry — {days !== null && days <= 0 ? 'expired' : `${days}d`}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{doc.originalName}</div>
+                  </div>
+                  <div style={{ marginLeft: 'auto', fontSize: 10, color: danger ? 'var(--red)' : 'var(--amber)', whiteSpace: 'nowrap', paddingTop: 2, fontWeight: 600 }}>
+                    {danger ? '⚠ Urgent' : `${days}d`}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
 
-        {showTransfers && (
+        {/* Recent Transfers */}
+        <div>
           <div className="table-card">
             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, fontSize: 13 }}>Recent Transfers</span>
-              {Array.isArray(transferList) && transferList.length > 0 && (
-                <span className="badge-dot badge-pending" style={{ marginLeft: 'auto' }}>{transferList.length} pending</span>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>🔄 Recent Transfers</span>
+              {(pendingTransfers?.total || 0) > 0 && (
+                <span className="badge badge-pending" style={{ marginLeft: 'auto' }}>{pendingTransfers.total} pending</span>
               )}
             </div>
-            {loadingTransfers ? (
-              <div style={{ padding: 16 }}><Skeleton style={{ height: 80 }} /></div>
-            ) : !Array.isArray(transferList) || transferList.length === 0 ? (
-              <EmptyState text="No pending transfers" />
-            ) : (
-              <table className="ef-table">
-                <thead><tr><th>Expat</th><th>Reason</th><th>Status</th></tr></thead>
-                <tbody>
-                  {transferList.slice(0, 5).map(t => (
-                    <tr key={t.id}>
-                      <td>
-                        <div className="av-cell">
-                          <div className="av g">{initials(t.expat?.fullName)}</div>
-                          <div>
-                            <div className="av-name">{t.expat?.fullName || '—'}</div>
-                            <div className="av-sub">{t.transferType}</div>
-                          </div>
+            <table>
+              <thead>
+                <tr><th>Expat</th><th>Change</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {!pendingTransfers?.items?.length && (
+                  <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--text3)', padding: '24px' }}>No pending transfers</td></tr>
+                )}
+                {pendingTransfers?.items?.map(t => (
+                  <tr key={t.id} onClick={() => navigate('/transfers')}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className={`avatar ${getAvatarColor(t.expat?.fullName)}`}>{getInitials(t.expat?.fullName)}</div>
+                        <div>
+                          <div style={{ fontWeight: 500, fontSize: 13 }}>{t.expat?.fullName}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text3)' }}>{t.fromDormitory ? 'Dorm change' : 'Client change'}</div>
                         </div>
-                      </td>
-                      <td className="muted" style={{ fontSize: 12 }}>{t.reason || '—'}</td>
-                      <td><span className="badge-dot badge-pending">Pending</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                      </div>
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--text2)' }}>
+                      {[t.fromDormitory?.name, t.toDormitory?.name].filter(Boolean).join(' → ') ||
+                       [t.fromClient?.name, t.toClient?.name].filter(Boolean).join(' → ')}
+                    </td>
+                    <td><StatusBadge status={t.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
+        </div>
+      </div>
 
-        {showChecklists && (
-          <div className="table-card">
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontWeight: 600, fontSize: 13 }}>Active Checklists</span>
-            </div>
-            {loadingChecklists ? (
-              <div style={{ padding: 16 }}><Skeleton style={{ height: 80 }} /></div>
-            ) : checklistList.length === 0 ? (
-              <EmptyState text="No active checklists" />
-            ) : (
-              <div>
-                {checklistList.slice(0, 6).map(cl => {
-                  const total = cl._count?.items ?? 0;
-                  const done = cl.items?.filter(i => i.status === 'DONE').length ?? 0;
-                  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-                  return (
-                    <div key={cl.id} style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{cl.name}</div>
-                        <span className="badge-dot badge-transferred" style={{ fontSize: 10 }}>{cl.entityType}</span>
-                      </div>
-                      <div style={{ background: 'var(--surface3)', borderRadius: 4, height: 5 }}>
-                        <div style={{ width: `${pct}%`, height: 5, borderRadius: 4, background: 'var(--accent)', transition: 'width 0.4s' }} />
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4 }}>{done}/{total} items</div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+      {/* Dormitory Occupancy */}
+      <div style={{ marginTop: 16 }}>
+        <div className="table-card">
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>🏠 Dormitory Occupancy</span>
           </div>
-        )}
-
-        {showOccupancy && (
-          <div className="table-card">
-            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontWeight: 600, fontSize: 13 }}>Dormitory Occupancy</span>
-            </div>
-            {loadingDormitories ? (
-              <div style={{ padding: 16 }}><Skeleton style={{ height: 80 }} /></div>
-            ) : dormList.length === 0 ? (
-              <EmptyState text="No dormitories found" />
-            ) : (
-              <div style={{ padding: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-                {dormList.slice(0, 6).map(d => {
-                  const pct = d.capacity > 0 ? Math.round(((d.occupantCount ?? 0) / d.capacity) * 100) : 0;
-                  const isHigh = pct >= 90;
-                  return (
-                    <div key={d.id} style={{ background: 'var(--surface2)', borderRadius: 10, padding: 14 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{d.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>{d.address || '—'}</div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
-                        <span style={{ color: 'var(--text2)' }}>Occupancy</span>
-                        <span style={{ fontWeight: 600 }}>{d.occupantCount ?? 0} / {d.capacity}</span>
-                      </div>
-                      <div style={{ height: 5, background: 'var(--surface3)', borderRadius: 3 }}>
-                        <div style={{ height: 5, borderRadius: 3, background: isHigh ? 'var(--accent2)' : 'var(--accent)', width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          <div style={{ padding: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+            {!dorms?.length && (
+              <div style={{ color: 'var(--text3)', fontSize: 13, padding: '8px 0' }}>No dormitories</div>
             )}
+            {dorms?.map(d => {
+              const occ = d._count?.expats || 0;
+              const pct = d.capacity ? Math.round((occ / d.capacity) * 100) : 0;
+              const nearFull = pct >= 90;
+              return (
+                <div key={d.id} style={{ background: 'var(--surface2)', borderRadius: 'var(--r)', padding: 14, cursor: 'pointer' }}
+                  onClick={() => navigate(`/dormitories/${d.id}`)}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{d.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>{d.state}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
+                    <span style={{ color: 'var(--text2)' }}>Occupancy</span>
+                    <span style={{ fontWeight: 600, color: nearFull ? 'var(--accent2)' : 'var(--text)' }}>{occ} / {d.capacity}</span>
+                  </div>
+                  <div className="occ-bar">
+                    <div className="occ-fill" style={{ width: `${pct}%`, background: nearFull ? 'var(--accent2)' : 'var(--accent)' }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
-}
-
-function EmptyState({ text }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '32px 24px', color: 'var(--text3)', fontSize: 13 }}>{text}</div>
-  );
-}
-
-function initials(name) {
-  if (!name) return '?';
-  return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
 }

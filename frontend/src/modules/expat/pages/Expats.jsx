@@ -1,233 +1,230 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Eye } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { expatsApi, clientsApi, dormitoriesApi } from '../../../api/index.js';
-import { DataTable } from '../../../components/shared/DataTable.jsx';
-import { PageHeader } from '../../../components/shared/PageHeader.jsx';
-import { StatusBadge } from '../../../components/shared/StatusBadge.jsx';
-import { Button } from '../../../components/ui/button.jsx';
-import { Badge } from '../../../components/ui/badge.jsx';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../components/ui/dialog.jsx';
-import { Input } from '../../../components/ui/input.jsx';
-import { Label } from '../../../components/ui/label.jsx';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../../../components/ui/select.jsx';
-import { useToast } from '../../../components/ui/toast.jsx';
-import { formatDate, daysUntil, expiryStatus } from '../../../lib/utils.js';
+import { useNavigate } from 'react-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, Download, Search } from 'lucide-react';
+import { expats as expatsApi, clients as clientsApi, dormitories as dormsApi } from '../../../api/index.js';
+import StatusBadge from '../../../components/shared/StatusBadge.jsx';
+import { formatDate, daysUntil, getExpiryClass, getInitials, getAvatarColor } from '../../../lib/utils.js';
 
-function ExpiryCell({ date }) {
-  const days = daysUntil(date);
-  const status = expiryStatus(date);
-  const color = status === 'expired' || status === 'critical' ? 'destructive' : status === 'warning' ? 'warning' : 'default';
-  if (!date) return <span className="text-slate-400">—</span>;
-  return (
-    <Badge variant={color}>
-      {days <= 0 ? 'Expired' : days <= 30 ? `${days}d` : formatDate(date)}
-    </Badge>
-  );
-}
+const STATUS_TABS = [
+  { key: '', label: 'All' },
+  { key: 'ACTIVE', label: 'Active' },
+  { key: 'PENDING', label: 'Pending' },
+  { key: 'TRANSFERRED', label: 'Transferred' },
+  { key: 'EXPIRED', label: 'Expiring Soon' },
+];
 
-const INITIAL_FORM = {
-  fullName: '', passportNo: '', nationality: '', dateOfBirth: '',
-  phone: '', clientId: '', dormitoryId: '', permitExpiry: '', status: 'PENDING',
-};
+const NATIONALITIES = ['Bangladesh', 'India', 'Vietnam', 'Indonesia', 'China', 'Nepal', 'Myanmar', 'Pakistan', 'Philippines', 'Sri Lanka'];
 
 export default function Expats() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { toast } = useToast();
-  const [page, setPage] = useState(1);
+
+  const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState(INITIAL_FORM);
+  const [form, setForm] = useState({ fullName: '', passportNo: '', nationality: 'Bangladesh', dateOfBirth: '', phone: '', permitExpiry: '', status: 'PENDING', clientId: '', dormitoryId: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const pageSize = 25;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['expats', page, statusFilter],
-    queryFn: () => expatsApi.list({ page, status: statusFilter === 'all' ? undefined : statusFilter }),
+    queryKey: ['expats', { status: statusFilter, search, page }],
+    queryFn: () => expatsApi.list({ status: statusFilter, search, page, pageSize }).then(r => r.data),
+    keepPreviousData: true,
   });
 
-  const { data: clients } = useQuery({
-    queryKey: ['clients-all'],
-    queryFn: () => clientsApi.list({}),
-  });
+  const { data: clientList } = useQuery({ queryKey: ['clients-list'], queryFn: () => clientsApi.list({ pageSize: 100 }).then(r => r.data.items) });
+  const { data: dormList } = useQuery({ queryKey: ['dorms-list'], queryFn: () => dormsApi.list().then(r => r.data) });
 
-  const { data: dormitories } = useQuery({
-    queryKey: ['dorms-all'],
-    queryFn: () => dormitoriesApi.list({}),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: expatsApi.create,
-    onSuccess: () => {
+  async function handleCreate(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await expatsApi.create(form);
       qc.invalidateQueries({ queryKey: ['expats'] });
       setShowCreate(false);
-      setForm(INITIAL_FORM);
-      toast({ title: 'Expat created', type: 'success' });
-    },
-    onError: (err) => toast({ title: 'Error', description: err.response?.data?.error || 'Failed to create', type: 'error' }),
-  });
-
-  const allExpats = data?.data || data || [];
-  const total = data?.total || (Array.isArray(allExpats) ? allExpats.length : 0);
-
-  const filtered = Array.isArray(allExpats)
-    ? allExpats.filter(e =>
-        !search ||
-        e.fullName?.toLowerCase().includes(search.toLowerCase()) ||
-        e.nationality?.toLowerCase().includes(search.toLowerCase())
-      )
-    : [];
-
-  const clientList = clients?.data || clients || [];
-  const dormList = dormitories?.data || dormitories || [];
-
-  const columns = [
-    {
-      key: 'expatNo',
-      header: 'Expat No',
-      render: (v) => <span className="font-mono text-xs font-semibold text-slate-500">{v || '—'}</span>,
-    },
-    {
-      key: 'fullName',
-      header: 'Name',
-      render: (v) => <span className="font-medium text-slate-800">{v || '—'}</span>,
-    },
-    { key: 'nationality', header: 'Nationality' },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (v) => <StatusBadge status={v} />,
-    },
-    {
-      key: 'permitExpiry',
-      header: 'Permit Expiry',
-      render: (v) => <ExpiryCell date={v} />,
-    },
-    {
-      key: 'id',
-      header: '',
-      sortable: false,
-      render: (_, row) => (
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/expats/${row.id}`)}>
-          <Eye size={14} /> View
-        </Button>
-      ),
-    },
-  ];
-
-  function setField(k) {
-    return (e) => setForm(p => ({ ...p, [k]: e.target.value }));
+      setForm({ fullName: '', passportNo: '', nationality: 'Bangladesh', dateOfBirth: '', phone: '', permitExpiry: '', status: 'PENDING', clientId: '', dormitoryId: '' });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to create expat');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <div>
-      <PageHeader
-        title="Expats"
-        description="Manage your foreign workers"
-        actions={
-          <div className="flex gap-2">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                {['PENDING', 'ACTIVE', 'TRANSFERRED', 'EXPIRED', 'REPATRIATED'].map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus size={14} /> Add Expat
-            </Button>
+      {/* Status tabs */}
+      <div className="tab-group" style={{ marginBottom: 16 }}>
+        {STATUS_TABS.map(t => (
+          <button key={t.key} className={`tab-item${statusFilter === t.key ? ' active' : ''}`}
+            onClick={() => { setStatusFilter(t.key); setPage(1); }}>
+            {t.label} {data && t.key === statusFilter ? `(${data.total})` : ''}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="table-card">
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600 }}>Expats</h3>
+          <div className="search-box" style={{ minWidth: 220 }}>
+            <Search size={14} style={{ color: 'var(--text3)' }} />
+            <input placeholder="Search by name, nationality…" value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }} />
           </div>
-        }
-      />
-
-      <DataTable
-        columns={columns}
-        data={filtered}
-        loading={isLoading}
-        total={total}
-        page={page}
-        pageSize={25}
-        onPageChange={setPage}
-        onSearch={setSearch}
-        searchPlaceholder="Search by name or nationality..."
-        emptyState="No expats found. Add one to get started."
-      />
-
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add New Expat</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={e => { e.preventDefault(); createMutation.mutate(form); }}
-            className="px-5 space-y-3"
-          >
-            {[
-              ['fullName', 'Full Name', 'text'],
-              ['passportNo', 'Passport No', 'text'],
-              ['nationality', 'Nationality', 'text'],
-              ['dateOfBirth', 'Date of Birth', 'date'],
-              ['phone', 'Phone', 'tel'],
-              ['permitExpiry', 'Permit Expiry Date', 'date'],
-            ].map(([k, l, t]) => (
-              <div key={k} className="space-y-1">
-                <Label>{l}</Label>
-                <Input type={t} value={form[k]} onChange={setField(k)} required />
-              </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button className="btn btn-outline" onClick={() => {}}>
+              <Download size={14} />
+              Bulk Export
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+              <Plus size={14} />
+              Add Expat
+            </button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>Passport</th><th>Client</th><th>Dormitory</th>
+              <th>Status</th><th>Permit Expiry</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && [1,2,3,4,5].map(i => (
+              <tr key={i} style={{ pointerEvents: 'none' }}>
+                {[1,2,3,4,5,6].map(j => (
+                  <td key={j}><div className="skeleton" style={{ height: 14, width: '70%', borderRadius: 4 }} /></td>
+                ))}
+              </tr>
             ))}
+            {!isLoading && data?.items?.map(expat => {
+              const days = daysUntil(expat.permitExpiry);
+              return (
+                <tr key={expat.id} onClick={() => navigate(`/expats/${expat.id}`)}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className={`avatar ${getAvatarColor(expat.fullName)}`}>{getInitials(expat.fullName)}</div>
+                      <div>
+                        <div style={{ fontWeight: 500, fontSize: 13 }}>{expat.fullName}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text3)' }}>{expat.nationality}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text2)' }}>
+                    {expat.passportNo}
+                  </td>
+                  <td style={{ fontSize: 13, color: 'var(--text2)' }}>{expat.client?.name || '—'}</td>
+                  <td style={{ fontSize: 13, color: 'var(--text2)' }}>{expat.dormitory?.name || '—'}</td>
+                  <td><StatusBadge status={expat.status} /></td>
+                  <td>
+                    <span className={getExpiryClass(days)}>
+                      {expat.permitExpiry ? formatDate(expat.permitExpiry) : '—'}
+                      {days !== null && days <= 30 && days > 0 ? ` ⚠` : ''}
+                      {days !== null && days <= 0 ? ' 🚨' : ''}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+            {!isLoading && !data?.items?.length && (
+              <tr><td colSpan={6}><div className="empty-state"><div style={{ fontSize: 32, marginBottom: 12 }}>👤</div><div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text2)' }}>No expats found</div></div></td></tr>
+            )}
+          </tbody>
+        </table>
+        {/* Pagination */}
+        {(data?.total || 0) > pageSize && (
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="btn btn-outline btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹ Prev</button>
+            <span style={{ fontSize: 12, color: 'var(--text2)' }}>Page {page} of {Math.ceil(data.total / pageSize)}</span>
+            <button className="btn btn-outline btn-sm" disabled={page * pageSize >= data.total} onClick={() => setPage(p => p + 1)}>Next ›</button>
+          </div>
+        )}
+      </div>
 
-            <div className="space-y-1">
-              <Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm(p => ({ ...p, status: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['PENDING', 'ACTIVE', 'TRANSFERRED', 'EXPIRED', 'REPATRIATED'].map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {/* Create Modal */}
+      {showCreate && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowCreate(false)}>
+          <div className="modal">
+            <div className="modal-header">
+              <h3 style={{ fontFamily: 'Instrument Serif, serif', fontSize: 18 }}>Add New Expat</h3>
+              <button onClick={() => setShowCreate(false)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 18 }}>×</button>
             </div>
-
-            <div className="space-y-1">
-              <Label>Client</Label>
-              <Select value={form.clientId} onValueChange={v => setForm(p => ({ ...p, clientId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
-                <SelectContent>
-                  {Array.isArray(clientList) && clientList.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Dormitory</Label>
-              <Select value={form.dormitoryId} onValueChange={v => setForm(p => ({ ...p, dormitoryId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select dormitory" /></SelectTrigger>
-                <SelectContent>
-                  {Array.isArray(dormList) && dormList.map(d => (
-                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Creating...' : 'Create Expat'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+            <form onSubmit={handleCreate}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {error && <div style={{ padding: '8px 12px', background: 'var(--red-light)', color: 'var(--red)', borderRadius: 'var(--r-sm)', fontSize: 13 }}>{error}</div>}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="form-label">Full Name <span style={{ color: 'var(--accent2)' }}>*</span></label>
+                    <input className="form-input" placeholder="As per passport" required value={form.fullName} onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="form-label">Nationality <span style={{ color: 'var(--accent2)' }}>*</span></label>
+                    <select className="form-input" value={form.nationality} onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))}>
+                      {NATIONALITIES.map(n => <option key={n}>{n}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="form-label">Passport Number <span style={{ color: 'var(--accent2)' }}>*</span></label>
+                    <input className="form-input" placeholder="Passport no." required value={form.passportNo} onChange={e => setForm(f => ({ ...f, passportNo: e.target.value }))} />
+                    <div className="enc-hint">Stored encrypted</div>
+                  </div>
+                  <div>
+                    <label className="form-label">Date of Birth</label>
+                    <input type="date" className="form-input" value={form.dateOfBirth} onChange={e => setForm(f => ({ ...f, dateOfBirth: e.target.value }))} />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="form-label">Phone</label>
+                    <input className="form-input" placeholder="+60 12 345 6789" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="form-label">Permit Expiry</label>
+                    <input type="date" className="form-input" value={form.permitExpiry} onChange={e => setForm(f => ({ ...f, permitExpiry: e.target.value }))} />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label className="form-label">Assign to Client</label>
+                    <select className="form-input" value={form.clientId} onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))}>
+                      <option value="">— Unassigned —</option>
+                      {clientList?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label">Assign to Dormitory</label>
+                    <select className="form-input" value={form.dormitoryId} onChange={e => setForm(f => ({ ...f, dormitoryId: e.target.value }))}>
+                      <option value="">— None —</option>
+                      {dormList?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label">Initial Status</label>
+                  <select className="form-input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                    <option value="PENDING">Pending</option>
+                    <option value="ACTIVE">Active</option>
+                  </select>
+                </div>
+                <div style={{ background: 'var(--accent-light)', border: '1px solid rgba(31,78,61,0.15)', borderRadius: 'var(--r-sm)', padding: '10px 12px', fontSize: 12, color: 'var(--accent)' }}>
+                  ✓ Onboarding checklist will be auto-created from current templates
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Creating…' : 'Create Expat'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

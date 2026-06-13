@@ -1,211 +1,148 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Download, Upload } from 'lucide-react';
-import { clientsApi, checklistsApi, documentsApi } from '../../../api/index.js';
-import { DocumentUploadDialog } from '../../../components/shared/DocumentUploadDialog.jsx';
-import { AssignChecklistDialog } from '../../../components/shared/AssignChecklistDialog.jsx';
-import { ChecklistCard } from '../../../components/shared/ChecklistCard.jsx';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs.jsx';
-import { Button } from '../../../components/ui/button.jsx';
-import { Badge } from '../../../components/ui/badge.jsx';
-import { Card, CardContent } from '../../../components/ui/card.jsx';
-import { Skeleton } from '../../../components/ui/skeleton.jsx';
-import { StatusBadge } from '../../../components/shared/StatusBadge.jsx';
-import { DataTable } from '../../../components/shared/DataTable.jsx';
-import { useToast } from '../../../components/ui/toast.jsx';
-import { formatDate, daysUntil } from '../../../lib/utils.js';
+import { ArrowLeft, Upload, Plus } from 'lucide-react';
+import { clients as clientsApi, documents as docsApi, checklists as checklistApi } from '../../../api/index.js';
+import StatusBadge from '../../../components/shared/StatusBadge.jsx';
+import ChecklistCard from '../../../components/shared/ChecklistCard.jsx';
+import DocumentUploadDialog from '../../../components/shared/DocumentUploadDialog.jsx';
+import AssignChecklistDialog from '../../../components/shared/AssignChecklistDialog.jsx';
+import { getInitials, getAvatarColor, formatDate, formatFileSize, daysUntil } from '../../../lib/utils.js';
 
+const TABS = ['Overview', 'Expats', 'Documents', 'Checklists'];
 
 export default function ClientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const [tab, setTab] = useState('Overview');
   const [showUpload, setShowUpload] = useState(false);
-  const [showAssignChecklist, setShowAssignChecklist] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
 
   const { data: client, isLoading } = useQuery({
     queryKey: ['client', id],
-    queryFn: () => clientsApi.get(id),
+    queryFn: () => clientsApi.get(id).then(r => r.data),
   });
 
-  const { data: expats } = useQuery({
-    queryKey: ['client-expats', id],
-    queryFn: () => clientsApi.expats(id),
+  const { data: docs } = useQuery({
+    queryKey: ['documents', 'CLIENT', id],
+    queryFn: () => docsApi.list({ entityType: 'CLIENT', entityId: id }).then(r => r.data),
+    enabled: tab === 'Documents',
   });
 
   const { data: checklists } = useQuery({
-    queryKey: ['client-checklists', id],
-    queryFn: () => checklistsApi.list({ entityType: 'CLIENT', entityId: id }),
+    queryKey: ['checklists', 'CLIENT', id],
+    queryFn: () => checklistApi.list({ entityType: 'CLIENT', entityId: id }).then(r => r.data),
+    enabled: tab === 'Checklists',
   });
 
-  const { data: documents } = useQuery({
-    queryKey: ['client-documents', id],
-    queryFn: () => documentsApi.list({ entityType: 'CLIENT', entityId: id }),
-  });
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-
-  if (!client) return <p className="text-slate-500">Client not found.</p>;
-
-  const expatList = expats?.data || expats || [];
-  const checklistList = checklists?.data || (Array.isArray(checklists) ? checklists : []);
-  const documentList = documents?.data || (Array.isArray(documents) ? documents : []);
-
-  const expatColumns = [
-    {
-      key: 'fullName',
-      header: 'Name',
-      render: (v) => <span className="font-medium text-slate-800">{v || '—'}</span>,
-    },
-    { key: 'nationality', header: 'Nationality' },
-    { key: 'status', header: 'Status', render: (v) => <StatusBadge status={v} /> },
-    { key: 'permitExpiry', header: 'Permit Expiry', render: (v) => formatDate(v) },
-  ];
-
-  async function downloadDoc(doc) {
-    try {
-      const blob = await documentsApi.download(doc.id);
-      const url = URL.createObjectURL(blob);
-      const a = Object.assign(document.createElement('a'), { href: url, download: doc.documentType });
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast({ title: 'Download failed', type: 'error' });
-    }
-  }
+  if (isLoading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>Loading…</div>;
+  if (!client) return <div style={{ padding: 40 }}>Client not found.</div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}>
-          <ArrowLeft size={18} />
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+        <button className="btn btn-outline btn-sm" onClick={() => navigate('/clients')} style={{ padding: '5px 10px' }}>
+          <ArrowLeft size={14} /> Back
         </button>
-        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--blue-light)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 600 }}>
-          {(client.name || 'C').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
-        </div>
+        <div className={`avatar ${getAvatarColor(client.name)}`} style={{ width: 44, height: 44, fontSize: 16 }}>{getInitials(client.name)}</div>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontFamily: "'Instrument Serif', serif", fontSize: 20, color: 'var(--text)' }}>{client.name || 'Client'}</span>
-            {client.clientNo && (
-              <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: 'var(--text3)', background: 'var(--surface2)', padding: '2px 8px', borderRadius: 4 }}>
-                {client.clientNo}
-              </span>
-            )}
+          <div style={{ fontFamily: 'Instrument Serif, serif', fontSize: 22 }}>{client.name}</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 3 }}>
+            <StatusBadge status={client.type} />
+            <StatusBadge status={client.status} />
+            <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text3)' }}>Client #{client.clientNo}</span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3 }}>{client.type}</div>
         </div>
-        <StatusBadge status={client.type} />
       </div>
 
-      <Tabs defaultValue="info">
-        <TabsList>
-          <TabsTrigger value="info">Info</TabsTrigger>
-          <TabsTrigger value="expats">Expats ({Array.isArray(expatList) ? expatList.length : 0})</TabsTrigger>
-          <TabsTrigger value="checklists">Checklists ({checklistList.length})</TabsTrigger>
-          <TabsTrigger value="documents">Documents ({documentList.length})</TabsTrigger>
-        </TabsList>
+      <div className="tab-group" style={{ marginBottom: 20 }}>
+        {TABS.map(t => <button key={t} className={`tab-item${tab===t?' active':''}`} onClick={() => setTab(t)}>{t}{t==='Expats'?` (${client.expats?.length||0})`:''}</button>)}
+      </div>
 
-        <TabsContent value="info">
-          <div className="table-card">
-            {[
-              ['Type', null, <StatusBadge key="type" status={client.type} />],
-              ['Registration No', client.registrationNo],
-              ['Contact Person', client.contactName],
-              ['Contact Email', client.contactEmail],
-              ['Contact Phone', client.contactPhone],
-              ['Address', client.address],
-              ['Status', null, <StatusBadge key="status" status={client.status} />],
-            ].map(([label, val, node]) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 16px', borderBottom: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 12, color: 'var(--text3)' }}>{label}</span>
-                {node || <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>{val || '—'}</span>}
+      {tab === 'Overview' && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px 24px' }}>
+            <div className="detail-section-title">Client Information</div>
+            <div className="detail-row"><span className="detail-label">Name</span><span className="detail-val">{client.name}</span></div>
+            <div className="detail-row"><span className="detail-label">Type</span><span className="detail-val"><StatusBadge status={client.type} /></span></div>
+            <div className="detail-row"><span className="detail-label">Status</span><span className="detail-val"><StatusBadge status={client.status} /></span></div>
+            <div className="detail-row"><span className="detail-label">Registration No.</span><span className="detail-val" style={{ fontFamily: 'monospace' }}>{client.registrationNo || '—'}</span></div>
+            <div className="detail-row"><span className="detail-label">Contact</span><span className="detail-val">{client.contactName || '—'}</span></div>
+            <div className="detail-row"><span className="detail-label">Address</span><span className="detail-val" style={{ textAlign: 'right', maxWidth: 200 }}>{client.address || '—'}</span></div>
+          </div>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '20px 24px' }}>
+            <div className="detail-section-title">Assigned Dormitories</div>
+            {!client.dormAssignments?.length && <div style={{ fontSize: 13, color: 'var(--text3)' }}>No dormitories assigned.</div>}
+            {client.dormAssignments?.map(a => (
+              <div key={a.id} className="detail-row">
+                <span className="detail-label">{a.dormitory?.name}</span>
+                <span style={{ fontSize: 11, color: 'var(--text3)' }}>Since {formatDate(a.assignedAt)}</span>
               </div>
             ))}
           </div>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="expats">
-          <DataTable
-            columns={expatColumns}
-            data={Array.isArray(expatList) ? expatList : []}
-            emptyState="No expats assigned to this client."
-          />
-        </TabsContent>
-
-        <TabsContent value="checklists">
-          <div className="space-y-3">
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => setShowAssignChecklist(true)}>
-                <Upload size={14} /> Assign Checklist
-              </Button>
-            </div>
-            {checklistList.map(cl => (
-              <ChecklistCard key={cl.id} checklist={cl} queryKey={['client-checklists', id]} />
-            ))}
-            {checklistList.length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center">No checklists found.</p>
-            )}
-          </div>
-          <AssignChecklistDialog
-            open={showAssignChecklist}
-            onOpenChange={setShowAssignChecklist}
-            entityType="CLIENT"
-            entityId={id}
-            queryKey={['client-checklists', id]}
-          />
-        </TabsContent>
-
-        <TabsContent value="documents">
-          <div className="space-y-3">
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => setShowUpload(true)}>
-                <Upload size={14} /> Upload Document
-              </Button>
-            </div>
-            {documentList.map(doc => {
-              const days = daysUntil(doc.expiryDate);
-              return (
-                <Card key={doc.id}>
-                  <CardContent className="pt-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">{doc.documentType}</p>
-                      <p className="text-xs text-slate-500 flex items-center gap-1">
-                        Expires {formatDate(doc.expiryDate)}
-                        {days !== null && days <= 30 && (
-                          <Badge variant={days <= 0 ? 'destructive' : 'warning'}>
-                            {days <= 0 ? 'Expired' : `${days}d`}
-                          </Badge>
-                        )}
-                      </p>
+      {tab === 'Expats' && (
+        <div className="table-card">
+          <table>
+            <thead><tr><th>Name</th><th>Nationality</th><th>Status</th><th>Dormitory</th></tr></thead>
+            <tbody>
+              {!client.expats?.length && <tr><td colSpan={4}><div className="empty-state"><div style={{ fontSize: 32, marginBottom: 12 }}>👤</div><div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text2)' }}>No expats for this client</div></div></td></tr>}
+              {client.expats?.map(e => (
+                <tr key={e.id} onClick={() => navigate(`/expats/${e.id}`)}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className={`avatar ${getAvatarColor(e.fullName)}`}>{getInitials(e.fullName)}</div>
+                      <div>
+                        <div style={{ fontWeight: 500 }}>{e.fullName}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text3)' }}>{e.expatNo}</div>
+                      </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => downloadDoc(doc)}>
-                      <Download size={14} />
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-            {documentList.length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center">No documents uploaded yet.</p>
-            )}
+                  </td>
+                  <td style={{ color: 'var(--text2)' }}>{e.nationality}</td>
+                  <td><StatusBadge status={e.status} /></td>
+                  <td style={{ color: 'var(--text2)', fontSize: 12 }}>{e.dormitory?.name || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === 'Documents' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <button className="btn btn-primary" onClick={() => setShowUpload(true)}><Upload size={14} /> Upload</button>
           </div>
-          <DocumentUploadDialog
-            open={showUpload}
-            onOpenChange={setShowUpload}
-            entityType="CLIENT"
-            entityId={id}
-            queryKey={['client-documents', id]}
-          />
-        </TabsContent>
-      </Tabs>
+          <div className="table-card">
+            {!docs?.length && <div style={{ padding: 32, textAlign: 'center', color: 'var(--text3)' }}>No documents uploaded.</div>}
+            {docs?.map((doc, i) => (
+              <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < docs.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                <div style={{ width: 36, height: 36, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>📄</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{doc.originalName}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)' }}>{doc.documentType} · {formatFileSize(doc.fileSizeBytes)}{doc.expiryDate ? ` · Expires ${formatDate(doc.expiryDate)}` : ''}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {showUpload && <DocumentUploadDialog entityType="CLIENT" entityId={id} onClose={() => setShowUpload(false)} />}
+        </div>
+      )}
+
+      {tab === 'Checklists' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <button className="btn btn-primary" onClick={() => setShowChecklist(true)}><Plus size={14} /> Assign Checklist</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {!checklists?.length && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text3)' }}>No checklists assigned.</div>}
+            {checklists?.map(cl => <ChecklistCard key={cl.id} checklist={cl} entityType="CLIENT" entityId={id} />)}
+          </div>
+          {showChecklist && <AssignChecklistDialog entityType="CLIENT" entityId={id} onClose={() => setShowChecklist(false)} />}
+        </div>
+      )}
     </div>
   );
 }

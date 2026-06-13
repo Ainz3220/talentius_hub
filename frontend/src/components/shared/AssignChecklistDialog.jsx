@@ -1,96 +1,69 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { checklistsApi } from '../../api/index.js';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog.jsx';
-import { Button } from '../ui/button.jsx';
-import { Input } from '../ui/input.jsx';
-import { Label } from '../ui/label.jsx';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select.jsx';
-import { useToast } from '../ui/toast.jsx';
+import { X } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { checklists as checklistApi } from '../../api/index.js';
 
-export function AssignChecklistDialog({ open, onOpenChange, entityType, entityId, queryKey }) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [templateId, setTemplateId] = useState('');
+export default function AssignChecklistDialog({ entityType, entityId, onClose }) {
+  const [selected, setSelected] = useState('');
   const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const qc = useQueryClient();
 
   const { data: templates } = useQuery({
-    queryKey: ['checklist-templates', entityType],
-    queryFn: () => checklistsApi.listTemplates({ entityType, isActive: true }),
-    enabled: open,
+    queryKey: ['checklist-templates'],
+    queryFn: () => checklistApi.listTemplates().then(r => r.data),
   });
 
-  const templateList = templates?.data || templates || [];
+  const filtered = templates?.filter(t => t.entityType === entityType || t.entityType === entityType) || [];
 
-  function handleTemplateChange(id) {
-    setTemplateId(id);
-    const tmpl = templateList.find(t => t.id === id);
-    if (tmpl) setName(tmpl.name);
-  }
-
-  const assignMutation = useMutation({
-    mutationFn: () => checklistsApi.create({ templateId: templateId || undefined, entityType, entityId, name }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey });
-      onOpenChange(false);
-      setTemplateId('');
-      setName('');
-      toast({ title: 'Checklist assigned', type: 'success' });
-    },
-    onError: (err) => toast({ title: 'Failed to assign checklist', description: err.response?.data?.error, type: 'error' }),
-  });
-
-  function handleClose() {
-    onOpenChange(false);
-    setTemplateId('');
-    setName('');
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!name.trim()) { setError('Name is required'); return; }
+    setSaving(true);
+    try {
+      await checklistApi.create({ templateId: selected || undefined, entityType, entityId, name: name.trim() });
+      qc.invalidateQueries({ queryKey: ['checklists', entityType, entityId] });
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to create checklist');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Assign Checklist</DialogTitle>
-        </DialogHeader>
-        <form
-          onSubmit={(e) => { e.preventDefault(); assignMutation.mutate(); }}
-          className="px-5 space-y-3"
-        >
-          <div className="space-y-1">
-            <Label>Template</Label>
-            <Select value={templateId} onValueChange={handleTemplateChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a template" />
-              </SelectTrigger>
-              <SelectContent>
-                {templateList.map(t => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name} ({t.items?.length ?? 0} items)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {templateList.length === 0 && (
-              <p className="text-xs text-slate-400">No active templates for {entityType}.</p>
-            )}
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ width: 420 }}>
+        <div className="modal-header">
+          <h3 style={{ fontFamily: 'Instrument Serif, serif', fontSize: 18 }}>Assign Checklist</h3>
+          <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)' }}>
+            <X size={16} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {error && <div style={{ padding: '8px 12px', background: 'var(--red-light)', color: 'var(--red)', borderRadius: 'var(--r-sm)', fontSize: 13 }}>{error}</div>}
+            <div>
+              <label className="form-label">Checklist Name <span style={{ color: 'var(--accent2)' }}>*</span></label>
+              <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Onboarding Checklist" />
+            </div>
+            <div>
+              <label className="form-label">Template (optional)</label>
+              <select className="form-input" value={selected} onChange={e => setSelected(e.target.value)}>
+                <option value="">— Blank checklist —</option>
+                {filtered.map(t => <option key={t.id} value={t.id}>{t.name} ({t.items?.length || 0} items)</option>)}
+              </select>
+            </div>
           </div>
-          <div className="space-y-1">
-            <Label>Checklist Name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Name for this checklist instance"
-              required
-            />
+          <div className="modal-footer">
+            <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Creating…' : 'Create Checklist'}
+            </button>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-            <Button type="submit" disabled={assignMutation.isPending || !name.trim()}>
-              {assignMutation.isPending ? 'Assigning...' : 'Assign'}
-            </Button>
-          </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
