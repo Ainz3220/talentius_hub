@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, SlidersHorizontal, X, ChevronRight } from 'lucide-react';
+import { Plus, SlidersHorizontal, X, ChevronRight } from 'lucide-react';
 import { expats as expatsApi } from '../../../api/index.js';
 import StatusBadge from '../../../components/shared/StatusBadge.jsx';
 import { formatDate, daysUntil, getExpiryClass, getInitials, getAvatarColor } from '../../../lib/utils.js';
@@ -15,34 +15,189 @@ const STATUS_TABS = [
 ];
 
 const OPERATORS = {
-  text:    [{ value: 'contains', label: 'contains' }],
-  select:  [{ value: 'eq', label: '=' }],
+  text: [
+    { value: 'match',   label: 'match'   },
+    { value: 'eq',      label: '='       },
+    { value: 'include', label: 'in list' },
+    { value: 'exclude', label: 'exclude' },
+  ],
+  select: [
+    { value: 'eq',      label: '='       },
+    { value: 'include', label: 'in list' },
+    { value: 'exclude', label: 'exclude' },
+  ],
   boolean: [],
-  date:    [{ value: 'before', label: 'before' }, { value: 'after', label: 'after' }, { value: 'between', label: 'between' }],
+  date: [
+    { value: 'eq',      label: '='       },
+    { value: 'gt',      label: '>'       },
+    { value: 'gte',     label: '>='      },
+    { value: 'lt',      label: '<'       },
+    { value: 'lte',     label: '<='      },
+    { value: 'between', label: 'between' },
+  ],
+  number: [
+    { value: 'eq',      label: '='       },
+    { value: 'gt',      label: '>'       },
+    { value: 'gte',     label: '>='      },
+    { value: 'lt',      label: '<'       },
+    { value: 'lte',     label: '<='      },
+    { value: 'between', label: 'between' },
+  ],
 };
 
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
-function buildParams(conditions) {
-  const p = {};
-  for (const c of conditions) {
-    if (!c.value && c.fieldKey !== 'unassigned') continue;
-    if (c.fieldKey === 'permitExpiry') {
-      if (c.operator === 'before')  { p.permitExpiryTo   = c.value; }
-      if (c.operator === 'after')   { p.permitExpiryFrom = c.value; }
-      if (c.operator === 'between' && Array.isArray(c.value)) {
-        p.permitExpiryFrom = c.value[0];
-        p.permitExpiryTo   = c.value[1];
-      }
-    } else if (c.fieldKey === 'unassigned') {
-      p.unassigned = 'true';
-    } else {
-      p[c.fieldKey] = c.value;
-    }
-  }
-  return p;
+function defaultValue(field, op) {
+  if (field.type === 'boolean') return true;
+  if (op === 'between') return ['', ''];
+  if (op === 'include' || op === 'exclude') return [];
+  return '';
 }
 
+function buildParams(conditions, logic) {
+  const valid = conditions.filter(c => {
+    if (c.fieldKey === 'unassigned') return true;
+    if (Array.isArray(c.value)) return c.value.length > 0;
+    return c.value !== '' && c.value !== null && c.value !== undefined;
+  });
+  if (valid.length === 0) return {};
+  return {
+    filters: JSON.stringify(valid.map(c => ({ field: c.fieldKey, op: c.operator, value: c.value }))),
+    logic,
+  };
+}
+
+// ── Multi-select checkbox dropdown ─────────────────────────────────────────
+function MultiSelect({ options = [], value = [], onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handler(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const label = value.length === 0
+    ? '— select —'
+    : value.length === 1
+      ? options.find(o => o.value === value[0])?.label ?? value[0]
+      : `${value.length} selected`;
+
+  return (
+    <div ref={ref} style={{ position: 'relative', minWidth: 160 }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+          width: '100%', fontSize: 12, padding: '4px 8px', cursor: 'pointer',
+          background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', color: 'var(--text1)' }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        <span style={{ fontSize: 10, opacity: 0.45, flexShrink: 0 }}>▾</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 300, marginTop: 2,
+          background: '#fff', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)', minWidth: 190, maxHeight: 220, overflowY: 'auto', padding: 4 }}>
+          {options.map(opt => {
+            const checked = value.includes(opt.value);
+            return (
+              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12, userSelect: 'none' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                <input type="checkbox" checked={checked} onChange={() =>
+                  onChange(checked ? value.filter(v => v !== opt.value) : [...value, opt.value])
+                } style={{ margin: 0 }} />
+                {opt.label}
+              </label>
+            );
+          })}
+          {options.length === 0 && <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text3)' }}>No options</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Value input — adapts to field type + operator ─────────────────────────
+function ValueInput({ field, operator, value, onChange }) {
+  if (field.type === 'boolean') {
+    return <span style={{ fontSize: 12, color: 'var(--text3)' }}>is true</span>;
+  }
+
+  if (field.type === 'select') {
+    if (operator === 'include' || operator === 'exclude') {
+      return <MultiSelect options={field.options} value={Array.isArray(value) ? value : []} onChange={onChange} />;
+    }
+    return (
+      <select className="form-input" style={{ fontSize: 12, padding: '4px 8px', minWidth: 160 }}
+        value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">— select —</option>
+        {field.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    );
+  }
+
+  if (field.type === 'text') {
+    if (operator === 'include' || operator === 'exclude') {
+      return (
+        <input className="form-input" style={{ fontSize: 12, padding: '4px 8px', minWidth: 200 }}
+          placeholder="value1, value2, value3…"
+          value={Array.isArray(value) ? value.join(', ') : value}
+          onChange={e => onChange(e.target.value.split(',').map(v => v.trim()).filter(Boolean))} />
+      );
+    }
+    return (
+      <input className="form-input" style={{ fontSize: 12, padding: '4px 8px', minWidth: 160 }}
+        placeholder={`Enter ${field.label.toLowerCase()}…`}
+        value={value}
+        onChange={e => onChange(e.target.value)} />
+    );
+  }
+
+  if (field.type === 'date') {
+    if (operator === 'between') {
+      const [from, to] = Array.isArray(value) ? value : ['', ''];
+      return (
+        <>
+          <input type="date" className="form-input" style={{ fontSize: 12, padding: '4px 8px' }}
+            value={from} onChange={e => onChange([e.target.value, to])} />
+          <span style={{ fontSize: 11, color: 'var(--text3)' }}>and</span>
+          <input type="date" className="form-input" style={{ fontSize: 12, padding: '4px 8px' }}
+            value={to} onChange={e => onChange([from, e.target.value])} />
+        </>
+      );
+    }
+    return (
+      <input type="date" className="form-input" style={{ fontSize: 12, padding: '4px 8px' }}
+        value={value} onChange={e => onChange(e.target.value)} />
+    );
+  }
+
+  if (field.type === 'number') {
+    if (operator === 'between') {
+      const [from, to] = Array.isArray(value) ? value : ['', ''];
+      return (
+        <>
+          <input type="number" className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 90 }}
+            placeholder="from" value={from} onChange={e => onChange([e.target.value, to])} />
+          <span style={{ fontSize: 11, color: 'var(--text3)' }}>and</span>
+          <input type="number" className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 90 }}
+            placeholder="to" value={to} onChange={e => onChange([from, e.target.value])} />
+        </>
+      );
+    }
+    return (
+      <input type="number" className="form-input" style={{ fontSize: 12, padding: '4px 8px', width: 120 }}
+        value={value} onChange={e => onChange(e.target.value)} />
+    );
+  }
+
+  return null;
+}
+
+// ── Two-level category/field picker ───────────────────────────────────────
 function FieldPicker({ schema, onSelect, onClose }) {
   const [hoveredCat, setHoveredCat] = useState(schema?.[0]?.category ?? null);
   const ref = useRef(null);
@@ -58,11 +213,9 @@ function FieldPicker({ schema, onSelect, onClose }) {
   const activeCat = schema?.find(c => c.category === hoveredCat);
 
   return (
-    <div ref={ref} style={{
-      position: 'absolute', top: '100%', left: 0, zIndex: 200, marginTop: 4,
+    <div ref={ref} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 200, marginTop: 4,
       display: 'flex', background: '#fff', border: '1px solid var(--border)',
-      borderRadius: 'var(--r-sm)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: 200,
-    }}>
+      borderRadius: 'var(--r-sm)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: 200 }}>
       <div style={{ padding: 4, minWidth: 130, borderRight: '1px solid var(--border)' }}>
         {schema?.map(cat => (
           <div key={cat.category} onMouseEnter={() => setHoveredCat(cat.category)} style={{
@@ -78,9 +231,7 @@ function FieldPicker({ schema, onSelect, onClose }) {
       </div>
       <div style={{ padding: 4, minWidth: 150 }}>
         {activeCat?.fields?.map(field => (
-          <div key={field.key} onClick={() => onSelect(field)} style={{
-            padding: '7px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12, color: 'var(--text1)',
-          }}
+          <div key={field.key} onClick={() => onSelect(field)} style={{ padding: '7px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12, color: 'var(--text1)' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--hover)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
             {field.label}
@@ -91,65 +242,41 @@ function FieldPicker({ schema, onSelect, onClose }) {
   );
 }
 
+// ── Single condition row ───────────────────────────────────────────────────
 function ConditionRow({ condition, field, onUpdate, onRemove }) {
   if (!field) return null;
   const operators = OPERATORS[field.type] ?? [];
+
+  function handleOperatorChange(op) {
+    onUpdate({ ...condition, operator: op, value: defaultValue(field, op) });
+  }
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text2)', minWidth: 110 }}>{field.label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text2)', minWidth: 100 }}>{field.label}</span>
       {operators.length > 0 && (
         <select className="form-input" style={{ width: 'auto', fontSize: 12, padding: '4px 8px' }}
-          value={condition.operator}
-          onChange={e => onUpdate({ ...condition, operator: e.target.value, value: '' })}>
+          value={condition.operator} onChange={e => handleOperatorChange(e.target.value)}>
           {operators.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
         </select>
       )}
-      {field.type === 'select' && (
-        <select className="form-input" style={{ fontSize: 12, padding: '4px 8px', minWidth: 160 }}
-          value={condition.value}
-          onChange={e => onUpdate({ ...condition, value: e.target.value })}>
-          <option value="">— select —</option>
-          {field.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      )}
-      {field.type === 'text' && (
-        <input className="form-input" style={{ fontSize: 12, padding: '4px 8px', minWidth: 160 }}
-          placeholder={`Enter ${field.label.toLowerCase()}…`}
-          value={condition.value}
-          onChange={e => onUpdate({ ...condition, value: e.target.value })} />
-      )}
-      {field.type === 'date' && condition.operator !== 'between' && (
-        <input type="date" className="form-input" style={{ fontSize: 12, padding: '4px 8px' }}
-          value={condition.value}
-          onChange={e => onUpdate({ ...condition, value: e.target.value })} />
-      )}
-      {field.type === 'date' && condition.operator === 'between' && (
-        <>
-          <input type="date" className="form-input" style={{ fontSize: 12, padding: '4px 8px' }}
-            value={Array.isArray(condition.value) ? condition.value[0] : ''}
-            onChange={e => onUpdate({ ...condition, value: [e.target.value, Array.isArray(condition.value) ? condition.value[1] : ''] })} />
-          <span style={{ fontSize: 11, color: 'var(--text3)' }}>and</span>
-          <input type="date" className="form-input" style={{ fontSize: 12, padding: '4px 8px' }}
-            value={Array.isArray(condition.value) ? condition.value[1] : ''}
-            onChange={e => onUpdate({ ...condition, value: [Array.isArray(condition.value) ? condition.value[0] : '', e.target.value] })} />
-        </>
-      )}
-      {field.type === 'boolean' && (
-        <span style={{ fontSize: 12, color: 'var(--text3)' }}>is true</span>
-      )}
-      <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 2, borderRadius: 4, display: 'flex', alignItems: 'center' }}>
+      <ValueInput field={field} operator={condition.operator} value={condition.value}
+        onChange={val => onUpdate({ ...condition, value: val })} />
+      <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer',
+        color: 'var(--text3)', padding: 2, borderRadius: 4, display: 'flex', alignItems: 'center',
+        marginLeft: 2 }}>
         <X size={14} />
       </button>
     </div>
   );
 }
 
+// ── Main page ──────────────────────────────────────────────────────────────
 export default function Expats() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
   const [statusFilter, setStatusFilter] = useState('');
-  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ fullName: '', passportNo: '', nationality: '', dateOfBirth: '', phone: '', permitExpiry: '', status: 'PENDING', clientId: '', dormitoryId: '' });
@@ -158,6 +285,7 @@ export default function Expats() {
 
   const [conditions, setConditions] = useState([]);
   const [debouncedConditions, setDebouncedConditions] = useState([]);
+  const [logic, setLogic] = useState('AND');
   const [panelOpen, setPanelOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -187,17 +315,18 @@ export default function Expats() {
     }
   }, [nationalityOptions.length]);
 
-  const filterParams = buildParams(debouncedConditions);
+  const filterParams = buildParams(debouncedConditions, logic);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['expats', { status: statusFilter, search, page, ...filterParams }],
-    queryFn: () => expatsApi.list({ status: statusFilter, search, page, pageSize, ...filterParams }).then(r => r.data),
+    queryKey: ['expats', { status: statusFilter, page, ...filterParams }],
+    queryFn: () => expatsApi.list({ status: statusFilter, page, pageSize, ...filterParams }).then(r => r.data),
     keepPreviousData: true,
   });
 
   function addCondition(field) {
     const ops = OPERATORS[field.type] ?? [];
-    setConditions(prev => [...prev, { id: uid(), fieldKey: field.key, operator: ops[0]?.value ?? 'eq', value: field.type === 'boolean' ? true : '' }]);
+    const op = ops[0]?.value ?? 'eq';
+    setConditions(prev => [...prev, { id: uid(), fieldKey: field.key, operator: op, value: defaultValue(field, op) }]);
     setPickerOpen(false);
     if (!panelOpen) setPanelOpen(true);
   }
@@ -227,6 +356,12 @@ export default function Expats() {
     }
   }
 
+  const activeFilters = conditions.filter(c => {
+    if (c.fieldKey === 'unassigned') return true;
+    if (Array.isArray(c.value)) return c.value.length > 0;
+    return c.value !== '';
+  }).length;
+
   return (
     <div>
       <div className="table-card">
@@ -239,22 +374,18 @@ export default function Expats() {
                 style={{ padding: '5px 12px', fontSize: 12 }}
                 onClick={() => { setStatusFilter(t.key); setPage(1); }}>
                 {t.label}
-                {t.key === statusFilter && data ? (
-                  <span style={{ marginLeft: 5, fontSize: 11, opacity: 0.7 }}>{data.total}</span>
-                ) : null}
+                {t.key === statusFilter && data
+                  ? <span style={{ marginLeft: 5, fontSize: 11, opacity: 0.7 }}>{data.total}</span>
+                  : null}
               </button>
             ))}
           </div>
-          <div className="search-box" style={{ minWidth: 200 }}>
-            <Search size={14} style={{ color: 'var(--text3)' }} />
-            <input placeholder="Search by name…" value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1); }} />
-          </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="btn btn-outline" style={{ background: panelOpen ? 'var(--accent-light)' : undefined, borderColor: panelOpen ? 'var(--accent)' : undefined, color: panelOpen ? 'var(--accent)' : undefined }}
+            <button className="btn btn-outline"
+              style={{ background: panelOpen ? 'var(--accent-light)' : undefined, borderColor: panelOpen ? 'var(--accent)' : undefined, color: panelOpen ? 'var(--accent)' : undefined }}
               onClick={() => setPanelOpen(o => !o)}>
               <SlidersHorizontal size={14} />
-              {conditions.length > 0 ? `Filters (${conditions.length})` : 'Filters'}
+              {activeFilters > 0 ? `Filters (${activeFilters})` : 'Filters'}
             </button>
             <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
               <Plus size={14} />
@@ -266,15 +397,35 @@ export default function Expats() {
         {/* Filter panel */}
         {panelOpen && (
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg2)' }}>
+            {/* Logic toggle */}
+            {conditions.length > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 500 }}>Match</span>
+                {['AND', 'OR'].map(l => (
+                  <button key={l} type="button"
+                    onClick={() => setLogic(l)}
+                    style={{ padding: '3px 10px', borderRadius: 'var(--r-sm)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                      border: '1px solid', borderColor: logic === l ? 'var(--accent)' : 'var(--border)',
+                      background: logic === l ? 'var(--accent-light)' : 'transparent',
+                      color: logic === l ? 'var(--accent)' : 'var(--text2)' }}>
+                    {l}
+                  </button>
+                ))}
+                <span style={{ fontSize: 11, color: 'var(--text3)' }}>conditions</span>
+              </div>
+            )}
+
             {conditions.length === 0 && (
               <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 8 }}>No filters applied. Add a filter below.</div>
             )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {conditions.map(c => (
                 <ConditionRow key={c.id} condition={c} field={fieldMap[c.fieldKey]}
                   onUpdate={updateCondition} onRemove={() => removeCondition(c.id)} />
               ))}
             </div>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: conditions.length > 0 ? 10 : 0 }}>
               <div style={{ position: 'relative' }}>
                 <button className="btn btn-outline btn-sm" onClick={() => setPickerOpen(o => !o)}>

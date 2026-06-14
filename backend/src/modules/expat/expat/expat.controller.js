@@ -2,6 +2,7 @@ import prisma from '../../../config/db.js';
 import { z } from 'zod';
 import { encrypt, decrypt } from '../../../config/encryption.js';
 import { logCreate, logUpdate, logDelete } from '../../../audit/audit.service.js';
+import { SKIP_COLUMNS, COLUMN_CONFIG, VIRTUAL_FIELDS, CATEGORY_ORDER } from './expat.fields.js';
 
 const schema = z.object({
   fullName: z.string().min(1),
@@ -34,56 +35,194 @@ function formatExpat(e) {
   };
 }
 
+// ── Filter engine — DB-introspected, override-configured ──────────────────
+
+// PostgreSQL data_type → filter type
+const PG_TYPE_MAP = {
+  'character varying': 'text',
+  'varchar':           'text',
+  'text':              'text',
+  'uuid':              'text',
+  'integer':           'number',
+  'bigint':            'number',
+  'numeric':           'number',
+  'real':              'number',
+  'double precision':  'number',
+  'smallint':          'number',
+  'boolean':           'text',   // PostgreSQL booleans treated as text filters unless overridden
+  'timestamp with time zone':    'date',
+  'timestamp without time zone': 'date',
+  'date':              'date',
+};
+
+function camelToLabel(str) {
+  return str
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, s => s.toUpperCase())
+    .trim();
+}
+
+function toArr(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') return value.split(',').map(v => v.trim()).filter(Boolean);
+  return [value];
+}
+
+async function resolveOptions(cfg) {
+  if (cfg.options) return cfg.options;
+  if (!cfg.optionsSource) return undefined;
+  const src = cfg.optionsSource;
+  if (src.startsWith('distinct:')) {
+    const col = src.slice(9);
+    const rows = await prisma.expat.findMany({
+      select: { [col]: true }, distinct: [col], orderBy: { [col]: 'asc' },
+    });
+    return rows.filter(r => r[col] != null).map(r => ({ value: r[col], label: r[col] }));
+  }
+  if (src === 'model:Client') {
+    const items = await prisma.client.findMany({ select: { id: true, name: true }, where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } });
+    return items.map(c => ({ value: c.id, label: c.name }));
+  }
+  if (src === 'model:Dormitory') {
+    const items = await prisma.dormitory.findMany({ select: { id: true, name: true }, where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } });
+    return items.map(d => ({ value: d.id, label: d.name }));
+  }
+  return undefined;
+}
+
+// Introspect columns once per process (invalidated on restart)
+let _columnTypeMap = null; // { colName → filterType }
+async function getColumnTypeMap() {
+  if (_columnTypeMap) return _columnTypeMap;
+  const rows = await prisma.$queryRaw`
+    SELECT column_name, data_type
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND lower(table_name) = 'expat'
+    ORDER BY ordinal_position
+  `;
+  _columnTypeMap = {};
+  for (const { column_name: col, data_type: pgType } of rows) {
+    const cfg  = COLUMN_CONFIG[col] ?? {};
+    _columnTypeMap[col] = cfg.type ?? PG_TYPE_MAP[pgType] ?? 'text';
+  }
+  for (const v of VIRTUAL_FIELDS) _columnTypeMap[v.key] = v.type;
+  return _columnTypeMap;
+}
+
+async function buildClause({ field, op, value }) {
+  // Virtual fields (e.g. unassigned)
+  const virtual = VIRTUAL_FIELDS.find(v => v.key === field);
+  if (virtual) return virtual.clause ?? null;
+
+  const typeMap = await getColumnTypeMap();
+  const type = typeMap[field] ?? 'text';
+
+  const empty = value === '' || value === null || value === undefined ||
+    (Array.isArray(value) && value.length === 0);
+  if (empty) return null;
+
+  if (type === 'text') {
+    if (op === 'match')   return { [field]: { contains: value, mode: 'insensitive' } };
+    if (op === 'eq')      return { [field]: { equals: value, mode: 'insensitive' } };
+    if (op === 'include') return { [field]: { in: toArr(value) } };
+    if (op === 'exclude') return { NOT: { [field]: { in: toArr(value) } } };
+  }
+  if (type === 'select') {
+    if (op === 'eq')      return { [field]: value };
+    if (op === 'include') return { [field]: { in: toArr(value) } };
+    if (op === 'exclude') return { NOT: { [field]: { in: toArr(value) } } };
+  }
+  if (type === 'date') {
+    const d = v => new Date(v);
+    if (op === 'eq')  return { [field]: { equals: d(value) } };
+    if (op === 'gt')  return { [field]: { gt:  d(value) } };
+    if (op === 'gte') return { [field]: { gte: d(value) } };
+    if (op === 'lt')  return { [field]: { lt:  d(value) } };
+    if (op === 'lte') return { [field]: { lte: d(value) } };
+    if (op === 'between' && Array.isArray(value) && value[0] && value[1])
+      return { [field]: { gte: d(value[0]), lte: d(value[1]) } };
+  }
+  if (type === 'number') {
+    const n = v => parseFloat(v);
+    if (op === 'eq')  return { [field]: n(value) };
+    if (op === 'gt')  return { [field]: { gt:  n(value) } };
+    if (op === 'gte') return { [field]: { gte: n(value) } };
+    if (op === 'lt')  return { [field]: { lt:  n(value) } };
+    if (op === 'lte') return { [field]: { lte: n(value) } };
+    if (op === 'between' && Array.isArray(value) && value[0] !== '' && value[1] !== '')
+      return { [field]: { gte: n(value[0]), lte: n(value[1]) } };
+  }
+  return null;
+}
+
+// filterSchema — introspects DB, applies overrides, returns grouped schema
 export async function filterSchema(req, res, next) {
   try {
-    const [nationalities, clients, dormitories] = await Promise.all([
-      prisma.expat.findMany({ select: { nationality: true }, distinct: ['nationality'], orderBy: { nationality: 'asc' } }),
-      prisma.client.findMany({ select: { id: true, name: true }, where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
-      prisma.dormitory.findMany({ select: { id: true, name: true }, where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
-    ]);
-    res.json([
-      {
-        category: 'General',
-        fields: [
-          { key: 'nationality', label: 'Nationality', type: 'select',
-            options: nationalities.map(n => ({ value: n.nationality, label: n.nationality })) },
-        ],
-      },
-      {
-        category: 'Assignments',
-        fields: [
-          { key: 'clientId',    label: 'Client',     type: 'select',
-            options: clients.map(c => ({ value: c.id, label: c.name })) },
-          { key: 'dormitoryId', label: 'Dormitory',  type: 'select',
-            options: dormitories.map(d => ({ value: d.id, label: d.name })) },
-          { key: 'unassigned',  label: 'No Client',  type: 'boolean' },
-        ],
-      },
-      {
-        category: 'Dates',
-        fields: [
-          { key: 'permitExpiry', label: 'Permit Expiry', type: 'date' },
-        ],
-      },
-    ]);
+    const rows = await prisma.$queryRaw`
+      SELECT column_name, data_type
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND lower(table_name) = 'expat'
+      ORDER BY ordinal_position
+    `;
+    const columns = rows;
+
+    // Build ordered category map
+    const categoryMap = new Map(CATEGORY_ORDER.map(c => [c, []]));
+
+    // Process DB columns
+    for (const { column_name: col, data_type: pgType } of columns) {
+      if (SKIP_COLUMNS.has(col)) continue;
+      const cfg   = COLUMN_CONFIG[col] ?? {};
+      const type  = cfg.type  ?? PG_TYPE_MAP[pgType] ?? 'text';
+      const label = cfg.label ?? camelToLabel(col);
+      const cat   = cfg.category ?? 'Other';
+
+      if (!categoryMap.has(cat)) categoryMap.set(cat, []);
+      categoryMap.get(cat).push({ key: col, label, type, optionsSource: cfg.optionsSource, options: cfg.options });
+    }
+
+    // Append virtual fields into their categories
+    for (const v of VIRTUAL_FIELDS) {
+      const cat = v.category ?? 'Other';
+      if (!categoryMap.has(cat)) categoryMap.set(cat, []);
+      categoryMap.get(cat).push({ key: v.key, label: v.label, type: v.type });
+    }
+
+    // Resolve options and drop empty categories
+    const result = await Promise.all(
+      [...categoryMap.entries()]
+        .filter(([, fields]) => fields.length > 0)
+        .map(async ([category, fields]) => ({
+          category,
+          fields: await Promise.all(fields.map(async f => ({
+            key: f.key, label: f.label, type: f.type,
+            options: f.type === 'select' ? await resolveOptions(f) : undefined,
+          }))),
+        }))
+    );
+
+    res.json(result);
   } catch (err) { next(err); }
 }
 
 export async function list(req, res, next) {
   try {
-    const { page = 1, pageSize = 25, status, search, clientId, dormitoryId, unassigned, createdAfter, nationality, permitExpiryFrom, permitExpiryTo } = req.query;
+    const { page = 1, pageSize = 25, status, filters: filtersJson, logic = 'AND' } = req.query;
     const where = {};
+
     if (status) where.status = status;
-    if (unassigned === 'true') where.clientId = null;
-    else if (clientId) where.clientId = clientId;
-    if (dormitoryId) where.dormitoryId = dormitoryId;
-    if (search) where.fullName = { contains: search, mode: 'insensitive' };
-    if (createdAfter) where.createdAt = { gte: new Date(createdAfter) };
-    if (nationality) where.nationality = { equals: nationality, mode: 'insensitive' };
-    if (permitExpiryFrom || permitExpiryTo) {
-      where.permitExpiry = {};
-      if (permitExpiryFrom) where.permitExpiry.gte = new Date(permitExpiryFrom);
-      if (permitExpiryTo)   where.permitExpiry.lte = new Date(permitExpiryTo);
+
+    if (filtersJson) {
+      try {
+        const filters = JSON.parse(filtersJson);
+        const clauses = (await Promise.all(filters.map(buildClause))).filter(Boolean);
+        if (clauses.length > 0) {
+          if (logic === 'OR') where.OR = clauses;
+          else where.AND = clauses;
+        }
+      } catch (_) { /* malformed JSON — ignore */ }
     }
 
     const [total, items] = await Promise.all([
